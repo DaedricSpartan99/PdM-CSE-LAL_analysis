@@ -1,0 +1,88 @@
+% likelihood active learning
+
+clearvars
+rng(100,'twister')
+uqlab
+
+%% Bayesian inversion definition (single measurement)
+
+% Measurement (single)
+Y = 8.                 % measurement value
+discrepancy = 0.05^2   % measurement variance
+
+% Prior definition
+PriorOpts.Name = 'Prior'
+PriorOpts.Marginals(1).Type = 'Gaussian'    % prior form
+PriorOpts.Marginals(1).Moments = [0., 1.]   % prior mean and variance
+PriorInput = uq_createInput(PriorOpts);
+
+% Model definition
+a = 2
+ModelOpts.Name = 'myModel';
+ModelOpts.mFile = 'myModel'           % model selection
+ModelOpts.Parameters.a = a;
+myModel = uq_createModel(ModelOpts);  
+
+
+%% Likelihood definition for inversion
+LOpts.Name = 'log_likelihood_model';
+LOpts.mFile = 'log_likelihood_model';
+LOpts.Parameters.Model = myModel;
+LOpts.Parameters.Measurement = Y;
+LOpts.Parameters.Discrepancy = discrepancy;     % discrepancy model
+
+LogLikelihoodModel = uq_createModel(LOpts);
+
+%% LAL setup and hyperparameters tuning
+
+LALOpts.Bus.c = sqrt(2*pi*discrepancy) * 1.2    % best value: 1 / (max L + small_quantity) 
+LALOpts.Bus.p0 = 0.1                            % Quantile probability for Subset
+LALOpts.Bus.BatchSize = 1e5                             % Number of samples for Subset simulation
+LALOpts.MaximumEvaluations = 20
+
+LALOpts.ExpDesign.X = uq_getSample(10);
+LALOpts.ExpDesign.LogLikelihood = uq_evalModel(LogLikelihoodModel, X0);
+
+LALOpts.PCE.MinDegree = 2;
+LALOpts.PCE.MaxDegree = 12;
+
+LALOpts.LogLikelihood = LogLikelihoodModel;
+LALOpts.Prior = PriorInput;
+
+LALAnalysis = lal_analysis(LALOpts);
+
+
+%% Likelihood visualization
+
+% Plot Likelihood experimental design
+figure
+scatter(LALAnalysis.ExpDesign.X, exp(LALAnalysis.ExpDesign.LogLikelihood))
+xlabel('$x$')
+ylabel('$L$')
+title('Likelihood approximation experimental design')
+
+%% PCK of likelihood
+
+% Construct a PC-Kriging surrogate of the log-likelihood
+PCKOpts.Type = 'Metamodel';
+PCKOpts.MetaType = 'PCK';
+PCKOpts.Mode = 'sequential';
+PCKOpts.FullModel = LogLikelihoodModel;
+PCKOpts.PCE.Degree = LALOpts.PCE.MinDegree:2:LALOpts.PCE.MaxDegree;
+PCKOpts.PCE.Method = 'LARS';
+PCKOpts.ExpDesign.X = LALAnalysis.ExpDesign.X;
+PCKOpts.ExpDesign.Y = LALAnalysis.ExpDesign.LogLikelihood;
+PCKOpts.Kriging.Corr.Family = 'Gaussian';
+
+logL_PCK = uq_createModel(PCKOpts);
+
+logL_PCK.Error
+
+%% Get samples and draw an histogram
+
+BayesOpts.Prior = PriorInput;
+BayesOpts.LogLikelihood = logL_PCK;
+BayesOpts.Bus = LALOpts.Bus;
+
+BayesAnalysis = bus_
+

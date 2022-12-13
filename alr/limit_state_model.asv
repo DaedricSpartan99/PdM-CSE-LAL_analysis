@@ -1,0 +1,12 @@
+function out = limit_state_model(XP, Parameters)
+
+    L = uq_evalModel(Parameters.Likelihood, XP(:,1:end-1));
+
+    % Check for singularities
+    % Set a lower bound for L
+    if L < eps
+        L = 1e-12;
+    end
+
+    out = log(XP(:,end)) - log(Parameters.c) - log(L)
+end
