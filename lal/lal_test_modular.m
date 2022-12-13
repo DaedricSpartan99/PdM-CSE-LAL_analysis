@@ -38,7 +38,7 @@ LogLikelihoodModel = uq_createModel(LOpts);
 
 %% LAL setup and hyperparameters tuning
 
-LALOpts.Bus.c = sqrt(2*pi*LOpts.Parameters.Discrepancy) * 1.05    % best value: 1 / (max L + small_quantity) 
+LALOpts.Bus.logC = log(sqrt(2*pi*LOpts.Parameters.Discrepancy))    % best value: 1 / (max L + small_quantity) 
 LALOpts.Bus.p0 = 0.1                            % Quantile probability for Subset
 LALOpts.Bus.BatchSize = 1e4                             % Number of samples for Subset simulation
 LALOpts.Bus.MaxSampleSize = 1e5;

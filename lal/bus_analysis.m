@@ -3,7 +3,7 @@ function BayesianAnalysis = bus_analysis(BayesOpts)
     %% Bayesian inversion input options
     % BayesOpts.Prior:                              UQInput
     % BayesOpts.LogLikelihood:                      FunctionHandle
-    % BayesOpts.Bus.c:                              double, > 0
+    % BayesOpts.Bus.logC:                           double
     % BayesOpts.Bus.p0:                             double, 0 < p0 < 0.5
     % BayesOpts.Bus.BatchSize:                      integer, > 0
 
@@ -36,7 +36,7 @@ function BayesianAnalysis = bus_analysis(BayesOpts)
     %% Construct BuS Limit state function
     LSFOpts.mFile = 'limit_state_model';
     LSFOpts.isVectorized = true;
-    LSFOpts.Parameters.c = BayesOpts.Bus.c;        
+    LSFOpts.Parameters.logC = BayesOpts.Bus.logC;        
     LSFOpts.Parameters.LogLikelihood = BayesOpts.LogLikelihood;   % Set the surrogate model
     
     
@@ -51,7 +51,7 @@ function BayesianAnalysis = bus_analysis(BayesOpts)
     SSimAnalysis = uq_createAnalysis(SSOpts, '-private');
     
     %% Store results and opts
-    BayesianAnalysis.Results.Evidence = SSimAnalysis.Results.Pf / BayesOpts.Bus.c;
+    BayesianAnalysis.Results.Evidence = exp(log(SSimAnalysis.Results.Pf) - BayesOpts.Bus.logC);
     BayesianAnalysis.Results.Subset = SSimAnalysis.Results;
     History = {SSimAnalysis.Results.History.X};
     BayesianAnalysis.Results.PostSamples = History{end}{end}(:,2:end);

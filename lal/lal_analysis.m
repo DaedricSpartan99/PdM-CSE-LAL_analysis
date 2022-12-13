@@ -7,13 +7,13 @@ function LALAnalysis = lal_analysis(Opts)
     % Opts.ExpDesign.LogLikelihood: array N x 1
     % Opts.LogLikelihood:           UQModel
     % Opts.Prior:                   UQInput
-    % Opts.Bus.c:                   positive double
+    % Opts.Bus.logC:                double
     % Opts.Bus.p0:                  double, 0 < p0 < 0.5
     % Opts.Bus.BatchSize:           int, > 0
     % Opts.Bus.MaxSampleSize        int, > 0
     % Opts.PCE.MinDegree:           int, > 0
     % Opts.PCE.MaxDegree:           int, > 0
-    % Opts.PCE.Method               string, PCE coeff, 'LARS', 'OLS',...
+    % Opts.ExpDesign.FilterZeros    logical, filter experimental design
 
     %% Output fields
 
@@ -30,17 +30,26 @@ function LALAnalysis = lal_analysis(Opts)
     
     % Begin iterations
     for i = 1:Opts.MaximumEvaluations
+
+        % Apply experimental design filtering
+        if isfield(Opts.ExpDesign, 'FilterZeros') && Opts.ExpDesign.FilterZeros
+            indexes = logL > log(eps);
+            X = X(indexes,:);
+            logL = logL(indexes);
+        end
     
         % Construct a PC-Kriging surrogate of the log-likelihood
         PCKOpts.Type = 'Metamodel';
         PCKOpts.MetaType = 'PCK';
-        PCKOpts.Mode = 'sequential';
+        PCKOpts.Mode = 'optimal';
         PCKOpts.FullModel = Opts.LogLikelihood;
         PCKOpts.PCE.Degree = Opts.PCE.MinDegree:2:Opts.PCE.MaxDegree;
-        %PCKOpts.PCE.Method = 'LARS';
+        PCKOpts.Input = Opts.Prior;
+        PCKOpts.PCE.Method = 'LARS';
         PCKOpts.ExpDesign.X = X;
         PCKOpts.ExpDesign.Y = logL;
         PCKOpts.Kriging.Corr.Family = 'Gaussian';
+        %PCKOpts.Display = 'verbose';
     
         logL_PCK = uq_createModel(PCKOpts, '-private');
         

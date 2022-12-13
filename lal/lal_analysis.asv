@@ -13,7 +13,7 @@ function LALAnalysis = lal_analysis(Opts)
     % Opts.Bus.MaxSampleSize        int, > 0
     % Opts.PCE.MinDegree:           int, > 0
     % Opts.PCE.MaxDegree:           int, > 0
-    % Opts.PCE.Method               string, 'LARS'
+    % Opts.ExpDesign.Filtering      logical, filter experimental design
 
     %% Output fields
 
@@ -30,6 +30,13 @@ function LALAnalysis = lal_analysis(Opts)
     
     % Begin iterations
     for i = 1:Opts.MaximumEvaluations
+
+        % Apply experimental design filtering
+        if Opts.ExpDesign.Filtering
+            indexes = logL > log(eps);
+            X = X(indexes);
+            logL = logL(indexes);
+        end
     
         % Construct a PC-Kriging surrogate of the log-likelihood
         PCKOpts.Type = 'Metamodel';
@@ -37,7 +44,8 @@ function LALAnalysis = lal_analysis(Opts)
         PCKOpts.Mode = 'sequential';
         PCKOpts.FullModel = Opts.LogLikelihood;
         PCKOpts.PCE.Degree = Opts.PCE.MinDegree:2:Opts.PCE.MaxDegree;
-        PCKOpts.PCE.Method = 'LARS';
+        PCKOpts.PCE.Input = Opts.Prior;
+        %PCKOpts.PCE.Method = 'LARS';
         PCKOpts.ExpDesign.X = X;
         PCKOpts.ExpDesign.Y = logL;
         PCKOpts.Kriging.Corr.Family = 'Gaussian';
