@@ -1,11 +1,11 @@
 function BayesianAnalysis = bus_analysis(BayesOpts)
 
     %% Bayesian inversion input options
-    % BayesOpts.Prior
-    % BayesOpts.Bus.c
-    % BayesOpts.LogLikelihood
-    % BayesOpts.Subset.p0
-    % BayesOpts.Subset.BatchSize:                   
+    % BayesOpts.Prior:                              UQInput
+    % BayesOpts.LogLikelihood:                      FunctionHandle
+    % BayesOpts.Bus.c:                              double, > 0
+    % BayesOpts.Bus.p0:                             double, 0 < p0 < 0.5
+    % BayesOpts.Bus.BatchSize:                      integer, > 0
 
     %% Bayesian inversion output results
 
@@ -26,7 +26,8 @@ function BayesianAnalysis = bus_analysis(BayesOpts)
     
     % Setup X random variable
     % TODO: manage correlation
-    for i = 1:lenght(BayesOpts.Prior.Marginals)
+    for i = 1:length(BayesOpts.Prior.Marginals)
+        
         BusPriorOpts.Marginals(i+1).Type = BayesOpts.Prior.Marginals(i).Type;
         BusPriorOpts.Marginals(i+1).Parameters = BayesOpts.Prior.Marginals(i).Parameters;
     end
@@ -41,8 +42,9 @@ function BayesianAnalysis = bus_analysis(BayesOpts)
     %% Setup and run the Subset simulation
     SSOpts.Type = 'Reliability';
     SSOpts.Method = 'Subset';
-    SSOpts.SubsetSim.p0 = BayesOpts.Subset.p0;
-    SSOpts.Simulation.BatchSize = BayesOpts.Subset.BatchSize;
+    SSOpts.Subset.p0 = BayesOpts.Bus.p0;
+    SSOpts.Simulation.BatchSize = BayesOpts.Bus.BatchSize;
+    SSOpts.Simulation.MaxSampleSize = BayesOpts.Bus.MaxSampleSize;
     SSOpts.Model = uq_createModel(LSFOpts, '-private');
     SSOpts.Input = uq_createInput(BusPriorOpts, '-private');
     SSimAnalysis = uq_createAnalysis(SSOpts, '-private');

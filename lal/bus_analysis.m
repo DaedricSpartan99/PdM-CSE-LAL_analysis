@@ -27,8 +27,10 @@ function BayesianAnalysis = bus_analysis(BayesOpts)
     % Setup X random variable
     % TODO: manage correlation
     for i = 1:length(BayesOpts.Prior.Marginals)
+        %BusPriorOpts.Marginals(i+1) = BayesOpts.Prior.Options.Marginals(i);
         BusPriorOpts.Marginals(i+1).Type = BayesOpts.Prior.Marginals(i).Type;
         BusPriorOpts.Marginals(i+1).Parameters = BayesOpts.Prior.Marginals(i).Parameters;
+        %BusPriorOpts.Marginals(i+1).Moments = BayesOpts.Prior.Marginals(i).Moments;
     end
 
     %% Construct BuS Limit state function
@@ -51,10 +53,11 @@ function BayesianAnalysis = bus_analysis(BayesOpts)
     %% Store results and opts
     BayesianAnalysis.Results.Evidence = SSimAnalysis.Results.Pf / BayesOpts.Bus.c;
     BayesianAnalysis.Results.Subset = SSimAnalysis.Results;
-    BayesianAnalysis.Results.PostSamples = SSimAnalysis.Results.History.X{end}(:,2:end);
+    History = {SSimAnalysis.Results.History.X};
+    BayesianAnalysis.Results.PostSamples = History{end}{end}(:,2:end);
 
     BayesianAnalysis.Results.Bus.LSF = SSOpts.Model;
-    BayesianAnalysis.Results.Bus.PostSamples = SSimAnalysis.Results.History.X{end};
+    BayesianAnalysis.Results.Bus.PostSamples = History{end}{end};
 
     BayesianAnalysis.Opts = BayesOpts;
    

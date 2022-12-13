@@ -13,6 +13,7 @@ function LALAnalysis = lal_analysis(Opts)
     % Opts.Bus.MaxSampleSize        int, > 0
     % Opts.PCE.MinDegree:           int, > 0
     % Opts.PCE.MaxDegree:           int, > 0
+    % Opts.PCE.Method               string, PCE coeff, 'LARS', 'OLS',...
 
     %% Output fields
 
@@ -36,7 +37,7 @@ function LALAnalysis = lal_analysis(Opts)
         PCKOpts.Mode = 'sequential';
         PCKOpts.FullModel = Opts.LogLikelihood;
         PCKOpts.PCE.Degree = Opts.PCE.MinDegree:2:Opts.PCE.MaxDegree;
-        PCKOpts.PCE.Method = 'LARS';
+        %PCKOpts.PCE.Method = 'LARS';
         PCKOpts.ExpDesign.X = X;
         PCKOpts.ExpDesign.Y = logL;
         PCKOpts.Kriging.Corr.Family = 'Gaussian';
@@ -58,7 +59,7 @@ function LALAnalysis = lal_analysis(Opts)
         [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, BusAnalysis.Results.Bus.PostSamples);
         cost_LSF = abs(mean_post_LSF) ./ sqrt(var_post_LSF);
         [~, opt_index] = min(cost_LSF);
-        xopt = BusAnalysis.Results.PostSamples(opt_index);
+        xopt = BusAnalysis.Results.PostSamples(opt_index, :);
     
         % Add to experimental design
         X = [X; xopt];
