@@ -7,13 +7,13 @@ uqlab
 %% Bayesian inversion definition (single measurement)
 
 % Measurement (single)
-measurement = 8.                 % measurement value
-measurement_error = 0.4   % measurement confindence interval = 2 * std 
+measurements = [3,]                % measurement value
+measurement_error = 0.2   % measurement confindence interval = 2 * std 
 
 % Prior definition
 PriorOpts.Name = 'Prior'
 PriorOpts.Marginals(1).Type = 'Gaussian'    % prior form
-PriorOpts.Marginals(1).Moments = [0., 2.]   % prior mean and variance
+PriorOpts.Marginals(1).Moments = [0., 1.]   % prior mean and variance
 PriorInput = uq_createInput(PriorOpts);
 
 % Model definition
@@ -24,14 +24,14 @@ ModelOpts.Parameters.a = a;
 myModel = uq_createModel(ModelOpts);  
 
 % Initial experimental design
-init_expdesign = 20;
+init_expdesign = 5;
 
 
 %% Likelihood definition for inversion
 LOpts.Name = 'log_likelihood_model';
 LOpts.mFile = 'log_likelihood_model';
-LOpts.Parameters.Model = myModel;
-LOpts.Parameters.Measurement = measurement;
+LOpts.Parameters.ForwardModel = myModel;
+LOpts.Parameters.y = measurements;
 LOpts.Parameters.Discrepancy = (measurement_error / 2)^2;     % discrepancy model
 
 LogLikelihoodModel = uq_createModel(LOpts);
@@ -42,7 +42,7 @@ LALOpts.Bus.logC = log(sqrt(2*pi*LOpts.Parameters.Discrepancy))    % best value:
 LALOpts.Bus.p0 = 0.1                            % Quantile probability for Subset
 LALOpts.Bus.BatchSize = 1e4                             % Number of samples for Subset simulation
 LALOpts.Bus.MaxSampleSize = 1e5;
-LALOpts.MaximumEvaluations = 40
+LALOpts.MaximumEvaluations = 20
 
 LALOpts.ExpDesign.X = uq_getSample(init_expdesign);
 LALOpts.ExpDesign.LogLikelihood = uq_evalModel(LogLikelihoodModel, LALOpts.ExpDesign.X);
@@ -66,7 +66,7 @@ set(groot, 'defaultLegendInterpreter','latex');
 %% Likelihood visualization
 
 % Get analytical curve
-x_ana = linspace(-4.5, 4.5, 1000);
+x_ana = linspace(-4.5, 4.5, 1000).';
 L_ana = exp(uq_evalModel(LogLikelihoodModel, x_ana));
 prior_ana = exp(- (x_ana -  PriorOpts.Marginals(1).Moments(1)).^2 / (2. * PriorOpts.Marginals(1).Moments(2))) / sqrt(2*pi*PriorOpts.Marginals(1).Moments(2));
 
@@ -85,7 +85,7 @@ ylab = ylabel('Likelihood or Prior PDF');
 %set(ylab, 'Interpreter','latex');
 %set(ylab,'FontSize',17);
 title('LAL experimental design');
-lgd = legend('Analytical likelihood $\mathcal{L}(x)$', 'Analytical prior $\pi(x)$', 'Initial exp. design of $\mathcal{L}(x)$', 'LAL exp. design of $\mathcal{L}(x)$');
+lgd = legend('Analytical likelihood $\mathcal{L}(x; \mathcal{M}(x) = 2x; \mathcal{Y} = \{3\})$', 'Analytical prior $\pi(x) \sim \mathcal{N}(0,1)$', 'Initial exp. design of $\mathcal{L}(x)$', 'LAL exp. design of $\mathcal{L}(x)$');
 set(lgd, 'Interpreter','latex');
 set(lgd,'FontSize',16);
 lgd.Location = 'northwest';
@@ -119,6 +119,24 @@ BayesOpts.Bus.MaxSampleSize = 1e5;
 
 BayesAnalysis = bus_analysis(BayesOpts);
 
+% Get evidence
+Z = BayesAnalysis.Results.Evidence
+
+% Use MCMC to sample with reconstructed likelihood
+BayesOpts.Type = 'Inversion';
+BayesOpts.Name = 'Final invertion';
+BayesOpts.Prior = PriorInput;
+myData.y = measurements;
+BayesOpts.Data = myData;
+BayesOpts.LogLikelihood = @(params,y) uq_evalModel(logL_PCK, params);
+
+myBayesianAnalysis = uq_createAnalysis(BayesOpts);
+uq_postProcessInversion(myBayesianAnalysis, 'burnIn', 0.7)
+post_samples = myBayesianAnalysis.Results.PostProc.PostSample;
+post_samples = reshape(post_samples, size(post_samples,1) * size(post_samples,3), 1); 
+
+%% Plots
+
 % Get some prior samples
 uq_selectInput('Prior');
 prior_samples_X = uq_getSample(N_samples);
@@ -126,7 +144,7 @@ prior_samples_X = uq_getSample(N_samples);
 figure
 hold on
 histogram(prior_samples_X)
-histogram(BayesAnalysis.Results.PostSamples)
+histogram(post_samples)
 hold off
 xlab = xlabel('Input random variable $X$');
 set(xlab, 'Interpreter','latex');
