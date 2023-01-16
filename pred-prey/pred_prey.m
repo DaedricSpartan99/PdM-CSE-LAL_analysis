@@ -2,6 +2,8 @@ clearvars
 rng(100,'twister')
 uqlab
 
+addpath('../lal')
+
 %% Data set
 load('uq_Example_BayesianPreyPred.mat')
 
@@ -71,23 +73,38 @@ DiscrepancyOpts(1).Prior = SigmaDist1;
 DiscrepancyOpts(2).Type = 'Gaussian';
 DiscrepancyOpts(2).Prior = SigmaDist2;
 
-%% Pre-implemented UQLab MCMC Solver setup
+% Create discrepancy model
+DiscModelOpts.Name = 'discrepancy_model';
+DiscModelOpts.mFile = 'discrepancy_model';
+DiscrepancyModel = uq_createModel(DiscModelOpts);
 
-Solver.Type = 'MCMC';
-Solver.MCMC.Sampler = 'AIES';
-Solver.MCMC.Steps = 400;
-Solver.MCMC.NChains = 100;
+%% Log-likelihood definition
 
-Solver.MCMC.Visualize.Parameters = [5 6];
-Solver.MCMC.Visualize.Interval = 40;
+LOpts.Name = 'log_likelihood_model';
+LOpts.mFile = 'log_likelihood_model';
+LOpts.Parameters.ForwardModel = myForwardModel;
+LOpts.Parameters.DiscrepancyModel = DiscrepancyModel;
+LOpts.Parameters.DiscrepancyDim = 2; % length of DiscrepancyOpts
+LOpts.Parameters.myData = myData;  % Vectorize measurements
 
-BayesOpts.Type = 'Inversion';
-BayesOpts.Name = 'Bayesian model';
-BayesOpts.Prior = myPriorDist;
-BayesOpts.Data = myData;
-BayesOpts.Discrepancy = DiscrepancyOpts;
-BayesOpts.Solver = Solver;
+LogLikelihoodModel = uq_createModel(LOpts);
 
-myBayesianAnalysis = uq_createAnalysis(BayesOpts);
+%% Bayesian analysis
 
+LALOpts.Bus.logC = -10.; % best value: 1 / (max L + small_quantity) 
+LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
+LALOpts.Bus.BatchSize = 1e4;                             % Number of samples for Subset simulation
+LALOpts.Bus.MaxSampleSize = 1e5;
+LALOpts.MaximumEvaluations = 50;
+LALOpts.ExpDesign.FilterZeros = false;
+LALOpts.ExpDesign.InitEval = 5;
+LALOpts.PlotLogLikelihood = true;
 
+LALOpts.PCE.MinDegree = 4;
+LALOpts.PCE.MaxDegree = 32;
+
+LALOpts.LogLikelihood = LogLikelihoodModel;
+LALOpts.Prior = myPriorDist;
+LALOpts.Discrepancy = DiscrepancyOpts;
+
+LALAnalysis = lal_analysis(LALOpts);

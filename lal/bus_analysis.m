@@ -2,6 +2,7 @@ function BayesianAnalysis = bus_analysis(BayesOpts)
 
     %% Bayesian inversion input options
     % BayesOpts.Prior:                              UQInput
+    % BayesOpts.Discrepancy                         UQInput
     % BayesOpts.LogLikelihood:                      FunctionHandle
     % BayesOpts.Bus.logC:                           double
     % BayesOpts.Bus.p0:                             double, 0 < p0 < 0.5
@@ -23,14 +24,15 @@ function BayesianAnalysis = bus_analysis(BayesOpts)
     BusPriorOpts.Marginals(1).Name = 'P';
     BusPriorOpts.Marginals(1).Type = 'Uniform';
     BusPriorOpts.Marginals(1).Parameters = [0, 1];
+
+    M = length(BayesOpts.Prior.Marginals);
     
     % Setup X random variable
     % TODO: manage correlation
-    for i = 1:length(BayesOpts.Prior.Marginals)
+    for i = 1:M
         %BusPriorOpts.Marginals(i+1) = BayesOpts.Prior.Options.Marginals(i);
         BusPriorOpts.Marginals(i+1).Type = BayesOpts.Prior.Marginals(i).Type;
         BusPriorOpts.Marginals(i+1).Parameters = BayesOpts.Prior.Marginals(i).Parameters;
-        %BusPriorOpts.Marginals(i+1).Moments = BayesOpts.Prior.Marginals(i).Moments;
     end
 
     %% Construct BuS Limit state function
