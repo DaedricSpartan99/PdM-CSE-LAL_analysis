@@ -19,20 +19,28 @@ myForwardModel = uq_createModel(ModelOpts);
 %% Prior setup
 
 PriorOpts.Marginals(1).Name = ('alpha');
-PriorOpts.Marginals(1).Type = 'LogNormal';
-PriorOpts.Marginals(1).Moments = [1 0.1];
+%PriorOpts.Marginals(1).Type = 'LogNormal';
+%PriorOpts.Marginals(1).Moments = [1 0.1];
+PriorOpts.Marginals(1).Type = 'Constant';
+PriorOpts.Marginals(1).Parameters = [1];
 
 PriorOpts.Marginals(2).Name = ('beta');
-PriorOpts.Marginals(2).Type = 'LogNormal';
-PriorOpts.Marginals(2).Moments = [0.05 0.005];
+%PriorOpts.Marginals(2).Type = 'LogNormal';
+%PriorOpts.Marginals(2).Moments = [0.05 0.005];
+PriorOpts.Marginals(2).Type = 'Constant';
+PriorOpts.Marginals(2).Parameters = [0.05];
 
 PriorOpts.Marginals(3).Name = ('gamma');
-PriorOpts.Marginals(3).Type = 'LogNormal';
-PriorOpts.Marginals(3).Moments = [1 0.1];
+%PriorOpts.Marginals(3).Type = 'LogNormal';
+%PriorOpts.Marginals(3).Moments = [1 0.1];
+PriorOpts.Marginals(3).Type = 'Constant';
+PriorOpts.Marginals(3).Parameters = [1];
 
 PriorOpts.Marginals(4).Name = ('delta');
-PriorOpts.Marginals(4).Type = 'LogNormal';
-PriorOpts.Marginals(4).Moments = [0.05 0.005];
+%PriorOpts.Marginals(4).Type = 'LogNormal';
+%PriorOpts.Marginals(4).Moments = [0.05 0.005];
+PriorOpts.Marginals(4).Type = 'Constant';
+PriorOpts.Marginals(4).Parameters = [0.05];
 
 PriorOpts.Marginals(5).Name = ('initH');
 PriorOpts.Marginals(5).Type = 'LogNormal';
@@ -41,6 +49,8 @@ PriorOpts.Marginals(5).Parameters = [log(10) 1];
 PriorOpts.Marginals(6).Name = ('initL');
 PriorOpts.Marginals(6).Type = 'LogNormal';
 PriorOpts.Marginals(6).Parameters = [log(10) 1];
+%PriorOpts.Marginals(6).Type = 'Constant';
+%PriorOpts.Marginals(6).Parameters = [0.5];
 
 myPriorDist = uq_createInput(PriorOpts);
 
@@ -57,12 +67,16 @@ myData(2).MOMap = 22:42; % Output ID
 %% Discrepancy model
 
 SigmaOpts.Marginals(1).Name = 'Sigma2L';
+%SigmaOpts.Marginals(1).Type = 'Constant';
+%SigmaOpts.Marginals(1).Parameters = [0.5];
 SigmaOpts.Marginals(1).Type = 'Lognormal';
 SigmaOpts.Marginals(1).Parameters = [-1 1];
 
 SigmaDist1 = uq_createInput(SigmaOpts);
 
 SigmaOpts.Marginals(1).Name = 'Sigma2H';
+%SigmaOpts.Marginals(1).Type = 'Constant';
+%SigmaOpts.Marginals(1).Parameters = [0.2];
 SigmaOpts.Marginals(1).Type = 'Lognormal';
 SigmaOpts.Marginals(1).Parameters = [-1 1];
 
@@ -91,17 +105,18 @@ LogLikelihoodModel = uq_createModel(LOpts);
 
 %% Bayesian analysis
 
-LALOpts.Bus.logC = -10.; % best value: 1 / (max L + small_quantity) 
+LALOpts.Bus.logC = -10; % best value: 1 / (max L + small_quantity) 
 LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 LALOpts.Bus.BatchSize = 1e4;                             % Number of samples for Subset simulation
 LALOpts.Bus.MaxSampleSize = 1e5;
-LALOpts.MaximumEvaluations = 50;
+LALOpts.MaximumEvaluations = 5;
 LALOpts.ExpDesign.FilterZeros = false;
-LALOpts.ExpDesign.InitEval = 5;
+LALOpts.ExpDesign.InitEval = 10;
 LALOpts.PlotLogLikelihood = true;
+LALOpts.PlotTarget = 5;
 
-LALOpts.PCE.MinDegree = 4;
-LALOpts.PCE.MaxDegree = 32;
+LALOpts.PCE.MinDegree = 2;
+LALOpts.PCE.MaxDegree = 8;
 
 LALOpts.LogLikelihood = LogLikelihoodModel;
 LALOpts.Prior = myPriorDist;

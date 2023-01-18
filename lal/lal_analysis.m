@@ -32,8 +32,10 @@ function LALAnalysis = lal_analysis(Opts)
 
     M = length(JointPriorOpts.Marginals);
 
-    for i = 1:length(Opts.Discrepancy)
-        JointPriorOpts.Marginals(M+i) = Opts.Discrepancy(i).Prior.Marginals;
+    if isfield(Opts, 'Discrepancy')
+        for i = 1:length(Opts.Discrepancy)
+            JointPriorOpts.Marginals(M+i) = Opts.Discrepancy(i).Prior.Marginals;
+        end
     end
 
     JointPriorOpts.Marginals = rmfield(JointPriorOpts.Marginals, 'Moments');
@@ -52,21 +54,26 @@ function LALAnalysis = lal_analysis(Opts)
         logL = Opts.ExpDesign.LogLikelihood;
     end
 
+    if ~isfield(Opts, 'PlotLogLikelihood')
+        Opts.PlotLogLikelihood = false;
+    end
 
     % plot setup
     if Opts.PlotLogLikelihood
         figure
+        title('Log-likelihood convergence')
         ylabel('Log-Likelihood')
-        xlabel('X5')
+        xlabel('Marginal target X')
 
-        X5_K = X(:,5);
+        X5_K = X(:,Opts.PlotTarget);
         logL_K = logL;
         
         hold on
-        sp5 = scatter(X(:,5), logL);
+        sp5 = scatter(X(:,Opts.PlotTarget), logL);
         pp5 = plot(X5_K, logL_K);
+        pl5 = plot(X5_K, logL_K);
         hold off
-        legend('Experimental design', 'PCK')
+        legend('Experimental design', 'PCK', 'Real Log-Likelihood')
         
         drawnow
     end
@@ -86,11 +93,12 @@ function LALAnalysis = lal_analysis(Opts)
         PCKOpts.MetaType = 'PCK';
         PCKOpts.Mode = 'optimal';
         PCKOpts.FullModel = Opts.LogLikelihood;
-        PCKOpts.PCE.Degree = Opts.PCE.MinDegree:Opts.PCE.MaxDegree;
         PCKOpts.Input = JointPrior; 
+        PCKOpts.PCE.Degree = Opts.PCE.MinDegree:Opts.PCE.MaxDegree;
         PCKOpts.PCE.Method = 'LARS';
         PCKOpts.ExpDesign.X = X;
         PCKOpts.ExpDesign.Y = logL;
+        PCKOpts.Kriging.Optim.Method = 'CMAES';
         PCKOpts.Kriging.Corr.Family = 'Gaussian';
         PCKOpts.Display = 'verbose';
     
@@ -120,15 +128,18 @@ function LALAnalysis = lal_analysis(Opts)
         if Opts.PlotLogLikelihood
             n_plot = 1000;
 
-            X_plot = uq_getSample(JointPrior, n_plot);
+            %X_plot = sortrows(uq_getSample(JointPrior, n_plot), Opts.PlotTarget);
 
-            X_plot = sortrows(X_plot, 5);
+            % Use BUS posterior
+            X_plot = sortrows(BusAnalysis.Results.PostSamples(1:n_plot, :), Opts.PlotTarget);
 
-            X5_K = X_plot(:,5);
+            % Evaluate responses
             logL_K = uq_evalModel(logL_PCK, X_plot);
+            logL_real = uq_evalModel(Opts.LogLikelihood, X_plot);
 
-            set(sp5, 'XData', X(:,5), 'YData', logL);
-            set(pp5, 'XData', X5_K, 'YData', logL_K);
+            set(sp5, 'XData', X(:,Opts.PlotTarget), 'YData', logL);
+            set(pp5, 'XData', X_plot(:,Opts.PlotTarget), 'YData', logL_K);
+            set(pl5, 'XData', X_plot(:,Opts.PlotTarget), 'YData', logL_real);
 
             drawnow
         end
