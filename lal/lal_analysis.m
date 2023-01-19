@@ -100,7 +100,7 @@ function LALAnalysis = lal_analysis(Opts)
         PCKOpts.ExpDesign.Y = logL;
         PCKOpts.Kriging.Optim.Method = 'CMAES';
         PCKOpts.Kriging.Corr.Family = 'Gaussian';
-        PCKOpts.Display = 'verbose';
+        %PCKOpts.Display = 'verbose';
     
         logL_PCK = uq_createModel(PCKOpts, '-private');
         
@@ -110,6 +110,25 @@ function LALAnalysis = lal_analysis(Opts)
         BayesOpts.Prior = JointPrior;
         BayesOpts.Bus = Opts.Bus;
         BayesOpts.LogLikelihood = logL_PCK;
+
+        % Adaptively determine constant Bus.logC
+        % TODO: better algorithm
+        if ~isfield(Opts.Bus, 'logC')
+
+            % Default strategy
+            if ~isfield(BayesOpts.Bus, 'CStrategy')
+                BayesOpts.Bus.CStrategy = 'max';
+            end
+           
+            % Take specified strategy
+            if BayesOpts.Bus.CStrategy == 'max';
+                BayesOpts.Bus.logC = -max(logL);
+            else if Opts.Bus.CStrategy == 'latest';
+                BayesOpts.Bus.logC = -logL(end);
+            end
+
+            sprintf("Taking constant logC: %g", BayesOpts.Bus.logC);
+        end
     
         BusAnalysis = bus_analysis(BayesOpts);
     

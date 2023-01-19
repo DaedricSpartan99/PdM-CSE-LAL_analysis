@@ -16,5 +16,5 @@ function logL = log_likelihood_model(X, Parameters)
         logLY(:,i) = - dYSY ./ 2. - size(dY,2)*0.5*log(2*pi*disc(:,i));
     end
 
-    logL = sum(logLY, 2);
+    logL = sum(logLY, 2) .* Parameters.Amplification;
 end

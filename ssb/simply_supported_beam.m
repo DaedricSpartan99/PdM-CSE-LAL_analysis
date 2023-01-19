@@ -59,7 +59,7 @@ LogLikelihoodModel = uq_createModel(LOpts);
 
 %% Bayesian analysis
 
-LALOpts.Bus.logC = -30.;%sqrt(2*pi*var(myData.y))^length(myData.y)*10;    % best value: 1 / (max L + small_quantity) 
+%LALOpts.Bus.logC = -30.;%sqrt(2*pi*var(myData.y))^length(myData.y)*10;    % best value: 1 / (max L + small_quantity) 
 LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 LALOpts.Bus.MaxSampleSize = 1e4;
