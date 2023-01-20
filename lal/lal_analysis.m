@@ -27,28 +27,28 @@ function LALAnalysis = lal_analysis(Opts)
     %% Execution
 
     % Create joint input
-    JointPriorOpts.Name = strcat('Joint', Opts.Prior.Name);
-    JointPriorOpts.Marginals = Opts.Prior.Marginals;
+    %JointPriorOpts.Name = strcat('Joint', Opts.Prior.Name);
+    %JointPriorOpts.Marginals = Opts.Prior.Marginals;
 
-    M = length(JointPriorOpts.Marginals);
+    %M = length(JointPriorOpts.Marginals);
 
-    if isfield(Opts, 'Discrepancy')
-        for i = 1:length(Opts.Discrepancy)
-            JointPriorOpts.Marginals(M+i) = Opts.Discrepancy(i).Prior.Marginals;
-        end
-    end
+    %if isfield(Opts, 'Discrepancy')
+    %    for i = 1:length(Opts.Discrepancy)
+    %        JointPriorOpts.Marginals(M+i) = Opts.Discrepancy(i).Prior.Marginals;
+    %    end
+    %end
 
-    JointPriorOpts.Marginals = rmfield(JointPriorOpts.Marginals, 'Moments');
+    %JointPriorOpts.Marginals = rmfield(JointPriorOpts.Marginals, 'Moments');
 
-    JointPrior = uq_createInput(JointPriorOpts, '-private');
+    %JointPrior = uq_createInput(JointPriorOpts, '-private');
 
 
     % Initialize output following initial guesses
     if isfield(Opts.ExpDesign, 'InitEval')
 
-        X = uq_getSample(JointPrior, Opts.ExpDesign.InitEval);
+        X = uq_getSample(Opts.Prior, Opts.ExpDesign.InitEval);
 
-        logL = uq_evalModel(Opts.LogLikelihood, X);
+        logL = Opts.LogLikelihood(X);
     else
         X = Opts.ExpDesign.X;
         logL = Opts.ExpDesign.LogLikelihood;
@@ -61,55 +61,67 @@ function LALAnalysis = lal_analysis(Opts)
     % plot setup
     if Opts.PlotLogLikelihood
         figure
-        title('Log-likelihood convergence')
-        ylabel('Log-Likelihood')
-        xlabel('Marginal target X')
+        tiledlayout(1,2)
 
-        X5_K = X(:,Opts.PlotTarget);
-        logL_K = logL;
-        
+        check_interval = [min(Opts.Validation.PostLogLikelihood), max(Opts.Validation.PostLogLikelihood)];
+
+        ax1 = nexttile;
         hold on
-        sp5 = scatter(X(:,Opts.PlotTarget), logL);
-        pp5 = plot(X5_K, logL_K);
-        pl5 = plot(X5_K, logL_K);
+        plot(ax1, check_interval, check_interval);
+        post_valid_plot = scatter(ax1, Opts.Validation.PostLogLikelihood, Opts.Validation.PostLogLikelihood);
         hold off
-        legend('Experimental design', 'PCK', 'Real Log-Likelihood')
+        title(ax1, 'Posterior samples')
+        ylabel(ax1, 'Surrogate Log-Likelihood')
+        xlabel(ax1, 'Real Log-Likelihood')
+        xlim(check_interval)
+        ylim(check_interval)
+
+        check_interval = [min(Opts.Validation.PriorLogLikelihood), max(Opts.Validation.PriorLogLikelihood)];
+
+        ax2 = nexttile;
+        hold on
+        plot(ax2, check_interval , check_interval);
+        prior_valid_plot = scatter(ax2, Opts.Validation.PriorLogLikelihood, Opts.Validation.PriorLogLikelihood);
+        hold off
+        title(ax2, 'Prior samples')
+        ylabel(ax2, 'Surrogate Log-Likelihood')
+        xlabel(ax2, 'Real Log-Likelihood')
+        xlim(check_interval)
+        ylim(check_interval)
         
         drawnow
     end
+
+    %post_input = Opts.Prior;
     
     % Begin iterations
     for i = 1:Opts.MaximumEvaluations
-
-        % Apply experimental design filtering
-        if isfield(Opts.ExpDesign, 'FilterZeros') && Opts.ExpDesign.FilterZeros
-            indexes = logL > log(eps);
-            X = X(indexes,:);
-            logL = logL(indexes);
-        end
     
         % Construct a PC-Kriging surrogate of the log-likelihood
+        PCKOpts = Opts.PCK;
         PCKOpts.Type = 'Metamodel';
         PCKOpts.MetaType = 'PCK';
-        PCKOpts.Mode = 'optimal';
-        PCKOpts.FullModel = Opts.LogLikelihood;
-        PCKOpts.Input = JointPrior; 
-        PCKOpts.PCE.Degree = Opts.PCE.MinDegree:Opts.PCE.MaxDegree;
-        PCKOpts.PCE.Method = 'LARS';
+        %PCKOpts.Mode = 'optimal'; %'sequential'; 
+        %PCKOpts.FullModel = Opts.LogLikelihood;
+        PCKOpts.Input = Opts.Prior; 
         PCKOpts.ExpDesign.X = X;
         PCKOpts.ExpDesign.Y = logL;
-        PCKOpts.Kriging.Optim.Method = 'CMAES';
-        PCKOpts.Kriging.Corr.Family = 'Gaussian';
-        %PCKOpts.Display = 'verbose';
-    
+        
+        PCKOpts.ValidationSet.X = Opts.Validation.PostSamples;
+        PCKOpts.ValidationSet.Y = Opts.Validation.PostLogLikelihood;
+
         logL_PCK = uq_createModel(PCKOpts, '-private');
+
+        sprintf("Iteration number: %d", i)
+        sprintf("PCK LOO error: %g", logL_PCK.Error.LOO)
+        sprintf("PCK Validation error: %g", logL_PCK.Error.Val)
         
         % TODO: Determine optimal c = 1 / max(L)
 
         % Execute Bayesian Analysis in Bus framework
-        BayesOpts.Prior = JointPrior;
+        BayesOpts.Prior = Opts.Prior;
         BayesOpts.Bus = Opts.Bus;
-        BayesOpts.LogLikelihood = logL_PCK;
+        BayesOpts.LogLikelihood = logL_PCK; %;
 
         % Adaptively determine constant Bus.logC
         % TODO: better algorithm
@@ -121,13 +133,13 @@ function LALAnalysis = lal_analysis(Opts)
             end
            
             % Take specified strategy
-            if BayesOpts.Bus.CStrategy == 'max';
+            if BayesOpts.Bus.CStrategy == 'max'
                 BayesOpts.Bus.logC = -max(logL);
-            else if Opts.Bus.CStrategy == 'latest';
+            elseif Opts.Bus.CStrategy == 'latest'
                 BayesOpts.Bus.logC = -logL(end);
             end
 
-            sprintf("Taking constant logC: %g", BayesOpts.Bus.logC);
+            sprintf("Taking constant logC: %g", BayesOpts.Bus.logC)
         end
     
         BusAnalysis = bus_analysis(BayesOpts);
@@ -142,26 +154,20 @@ function LALAnalysis = lal_analysis(Opts)
     
         % Add to experimental design
         X = [X; xopt];
-        logL = [logL; uq_evalModel(Opts.LogLikelihood, xopt) ];
+        logL = [logL; Opts.LogLikelihood(xopt) ];
 
+        % Update plot
         if Opts.PlotLogLikelihood
-            n_plot = 1000;
-
-            %X_plot = sortrows(uq_getSample(JointPrior, n_plot), Opts.PlotTarget);
-
-            % Use BUS posterior
-            X_plot = sortrows(BusAnalysis.Results.PostSamples(1:n_plot, :), Opts.PlotTarget);
-
-            % Evaluate responses
-            logL_K = uq_evalModel(logL_PCK, X_plot);
-            logL_real = uq_evalModel(Opts.LogLikelihood, X_plot);
-
-            set(sp5, 'XData', X(:,Opts.PlotTarget), 'YData', logL);
-            set(pp5, 'XData', X_plot(:,Opts.PlotTarget), 'YData', logL_K);
-            set(pl5, 'XData', X_plot(:,Opts.PlotTarget), 'YData', logL_real);
+            set(post_valid_plot, 'XData', Opts.Validation.PostLogLikelihood, 'YData', uq_evalModel(logL_PCK, Opts.Validation.PostSamples));
+            set(prior_valid_plot, 'XData', Opts.Validation.PriorLogLikelihood, 'YData', uq_evalModel(logL_PCK, Opts.Validation.PriorSamples));
 
             drawnow
         end
+
+        % Posterior handle evaluation
+        %PostOpts.marginals(1).Type = 'posterior';
+
+        %post_input = uq_createInput(PostOpts, '-private');
     end
 
     % Store results
