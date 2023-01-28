@@ -124,17 +124,17 @@ post_samples_size = size(post_samples, 1);
 LALOpts.Bus.logC = -max(post_logL_samples); % best value: -max log(L) 
 LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
-LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 1000;
-LALOpts.ExpDesign.InitEval = 5;
+%LALOpts.Bus.MaxSampleSize = 1e4;
+LALOpts.MaximumEvaluations = 80;
+LALOpts.ExpDesign.InitEval = 10;
 LALOpts.PlotLogLikelihood = true;
 %LALOpts.CStrategy = 'max';
 
-LALOpts.PCK.Mode = 'optimal';
-LALOpts.PCK.PCE.Degree = 2:2:12;
-LALOpts.PCK.PCE.Method = 'LARS';
+%LALOpts.PCK.PCE.Degree = 2:2:12;
+%LALOpts.PCK.PCE.Method = 'LARS';
 %LALOpts.PCK.Optim.Method = 'CMAES';
-LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
+LALOpts.PCK.Kriging.Corr.Type = 'Separable';
+%LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
 %LALOpts.PCK.Kriging.Corr.Family = 'Gaussian';
 %LALOpts.PCK.Display = 'verbose';
 
@@ -149,6 +149,7 @@ LALOpts.Validation.PriorLogLikelihood = refBayesAnalysis.LogLikelihood(LALOpts.V
 LALAnalysis = lal_analysis(LALOpts);
 
 %% Analysis: plot of experimental design and real log-likelihood on marginal 5 and 6
+
 
 
 %figure

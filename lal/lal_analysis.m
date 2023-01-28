@@ -26,27 +26,10 @@ function LALAnalysis = lal_analysis(Opts)
 
     %% Execution
 
-    % Create joint input
-    %JointPriorOpts.Name = strcat('Joint', Opts.Prior.Name);
-    %JointPriorOpts.Marginals = Opts.Prior.Marginals;
-
-    %M = length(JointPriorOpts.Marginals);
-
-    %if isfield(Opts, 'Discrepancy')
-    %    for i = 1:length(Opts.Discrepancy)
-    %        JointPriorOpts.Marginals(M+i) = Opts.Discrepancy(i).Prior.Marginals;
-    %    end
-    %end
-
-    %JointPriorOpts.Marginals = rmfield(JointPriorOpts.Marginals, 'Moments');
-
-    %JointPrior = uq_createInput(JointPriorOpts, '-private');
-
-
     % Initialize output following initial guesses
     if isfield(Opts.ExpDesign, 'InitEval')
 
-        X = uq_getSample(Opts.Prior, Opts.ExpDesign.InitEval);
+        X = uq_getSample(Opts.Prior, Opts.ExpDesign.InitEval, 'LHS');
 
         logL = Opts.LogLikelihood(X);
     else
@@ -61,7 +44,7 @@ function LALAnalysis = lal_analysis(Opts)
     % plot setup
     if Opts.PlotLogLikelihood
         figure
-        tiledlayout(1,2)
+        tiledlayout(2,2)
 
         check_interval = [min(Opts.Validation.PostLogLikelihood), max(Opts.Validation.PostLogLikelihood)];
 
@@ -88,6 +71,20 @@ function LALAnalysis = lal_analysis(Opts)
         xlabel(ax2, 'Real Log-Likelihood')
         xlim(check_interval)
         ylim(check_interval)
+
+        ax3 = nexttile;
+        logLhist = histogram(ax3, logL);
+        title(ax3, 'Experimental design emplacement')
+        xlabel('Log-likelihood')
+
+        ax4 = nexttile;
+        W = pca(X);
+        T = X * W(:,1:2);
+        pca_scatter = scatter(ax4, T(:,1), T(:,2), 20, logL, 'Filled')
+        pca_colorbar = colorbar(ax4)
+        title('Experimental design PCA')
+        xlabel('x1')
+        ylabel('x2')
         
         drawnow
     end
@@ -96,12 +93,16 @@ function LALAnalysis = lal_analysis(Opts)
     
     % Begin iterations
     for i = 1:Opts.MaximumEvaluations
-    
+
+        % Address instabilities in the experimental design (0.05 quantile)
+        %if ~isfiled(Opts, 'cleanOutliers')   
+        %end
+            
         % Construct a PC-Kriging surrogate of the log-likelihood
         PCKOpts = Opts.PCK;
         PCKOpts.Type = 'Metamodel';
         PCKOpts.MetaType = 'PCK';
-        %PCKOpts.Mode = 'optimal'; %'sequential'; 
+        PCKOpts.Mode = 'optimal';  
         %PCKOpts.FullModel = Opts.LogLikelihood;
         PCKOpts.Input = Opts.Prior; 
         PCKOpts.ExpDesign.X = X;
@@ -121,7 +122,9 @@ function LALAnalysis = lal_analysis(Opts)
         % Execute Bayesian Analysis in Bus framework
         BayesOpts.Prior = Opts.Prior;
         BayesOpts.Bus = Opts.Bus;
-        BayesOpts.LogLikelihood = logL_PCK; %;
+        BayesOpts.LogLikelihood = logL_PCK; 
+
+        
 
         % Adaptively determine constant Bus.logC
         % TODO: better algorithm
@@ -160,14 +163,16 @@ function LALAnalysis = lal_analysis(Opts)
         if Opts.PlotLogLikelihood
             set(post_valid_plot, 'XData', Opts.Validation.PostLogLikelihood, 'YData', uq_evalModel(logL_PCK, Opts.Validation.PostSamples));
             set(prior_valid_plot, 'XData', Opts.Validation.PriorLogLikelihood, 'YData', uq_evalModel(logL_PCK, Opts.Validation.PriorSamples));
+            set(logLhist, 'Data', logL);
+
+            W = pca(X);
+            T = X * W(:,1:2);
+            set(pca_scatter, 'XData',T(:,1), 'YData', T(:,2), "CData", logL)
+            set(pca_colorbar, 'Limits', [min(logL), max(logL)])
+            %pca_scatter = scatter(T(:,1), T(:,2), "ColorVariable", logL, 'Filled')
 
             drawnow
         end
-
-        % Posterior handle evaluation
-        %PostOpts.marginals(1).Type = 'posterior';
-
-        %post_input = uq_createInput(PostOpts, '-private');
     end
 
     % Store results
