@@ -84,6 +84,7 @@ LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for
 LALOpts.MaximumEvaluations = 30;
 LALOpts.ExpDesign.InitEval = 10;
 LALOpts.PlotLogLikelihood = true;
+LALOpts.dbscanQuantile = 0.2;
 
 %LALOpts.PCK.PCE.Degree = 2:8;
 %LALOpts.PCK.PCE.Method = 'LARS';

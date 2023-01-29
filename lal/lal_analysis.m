@@ -94,73 +94,144 @@ function LALAnalysis = lal_analysis(Opts)
     % Begin iterations
     for i = 1:Opts.MaximumEvaluations
 
-        % Address instabilities in the experimental design (0.05 quantile)
-        %if ~isfiled(Opts, 'cleanOutliers')   
-        %end
+        % Get clusters
+
+        % TODO: cross validate minpts and quantile, maximize number
+        dbscan_minpts = Opts.dbscanMinpts;
+        dbscan_kD = pdist2(X,X,'euc','Smallest',dbscan_minpts);
+        
+        dbscan_kD_sorted = sort(dbscan_kD(end,:));
+        dbscan_epsilon = quantile(dbscan_kD_sorted,Opts.dbscanQuantile);
+
+        dbscan_labels = dbscan(X,dbscan_epsilon,dbscan_minpts);
+
+        unique_labels = sort(unique(dbscan_labels));
+        unique_labels = unique_labels(2:end); % Skip outliers
+        nb_labels = length(unique_labels);
+
+        sprintf("Clusters found: %d", nb_labels)
+
+        % Collect best options
+        X_star = zeros(nb_labels, size(X,2));
+        cost_star = zeros(nb_labels,1);
+        pcks = cell(nb_labels,1);
+
+        for label_index = 1:nb_labels
+
+            % Restrict experimental design to cluster
+            label = unique_labels(label_index);
+            X_label = X(dbscan_labels == label,:);
+            logL_label = logL(dbscan_labels == label);
             
-        % Construct a PC-Kriging surrogate of the log-likelihood
-        PCKOpts = Opts.PCK;
-        PCKOpts.Type = 'Metamodel';
-        PCKOpts.MetaType = 'PCK';
-        PCKOpts.Mode = 'optimal';  
-        %PCKOpts.FullModel = Opts.LogLikelihood;
-        PCKOpts.Input = Opts.Prior; 
-        PCKOpts.ExpDesign.X = X;
-        PCKOpts.ExpDesign.Y = logL;
-        
-        PCKOpts.ValidationSet.X = Opts.Validation.PostSamples;
-        PCKOpts.ValidationSet.Y = Opts.Validation.PostLogLikelihood;
-
-        logL_PCK = uq_createModel(PCKOpts, '-private');
-
-        sprintf("Iteration number: %d", i)
-        sprintf("PCK LOO error: %g", logL_PCK.Error.LOO)
-        sprintf("PCK Validation error: %g", logL_PCK.Error.Val)
-        
-        % TODO: Determine optimal c = 1 / max(L)
-
-        % Execute Bayesian Analysis in Bus framework
-        BayesOpts.Prior = Opts.Prior;
-        BayesOpts.Bus = Opts.Bus;
-        BayesOpts.LogLikelihood = logL_PCK; 
-
-        
-
-        % Adaptively determine constant Bus.logC
-        % TODO: better algorithm
-        if ~isfield(Opts.Bus, 'logC')
-
-            % Default strategy
-            if ~isfield(BayesOpts.Bus, 'CStrategy')
-                BayesOpts.Bus.CStrategy = 'max';
+            % Construct a PC-Kriging surrogate of the log-likelihood
+            PCKOpts = Opts.PCK;
+            PCKOpts.Type = 'Metamodel';
+            PCKOpts.MetaType = 'PCK';
+            PCKOpts.Mode = 'optimal';  
+            %PCKOpts.FullModel = Opts.LogLikelihood;
+            PCKOpts.Input = Opts.Prior; 
+            PCKOpts.ExpDesign.X = X_label;
+            PCKOpts.ExpDesign.Y = logL_label;
+            
+            PCKOpts.ValidationSet.X = Opts.Validation.PostSamples;
+            PCKOpts.ValidationSet.Y = Opts.Validation.PostLogLikelihood;
+    
+            logL_PCK = uq_createModel(PCKOpts, '-private');
+            pcks{label_index} = logL_PCK;
+    
+            sprintf("Iteration number: %d, Label = %d", i, label)
+            sprintf("PCK LOO error: %g", logL_PCK.Error.LOO)
+            sprintf("PCK Validation error: %g", logL_PCK.Error.Val)
+            
+            % TODO: Determine optimal c = 1 / max(L)
+    
+            % Execute Bayesian Analysis in Bus framework
+            BayesOpts.Prior = Opts.Prior;
+            BayesOpts.Bus = Opts.Bus;
+            BayesOpts.LogLikelihood = logL_PCK; 
+    
+            
+    
+            % Adaptively determine constant Bus.logC
+            % TODO: better algorithm
+            if ~isfield(Opts.Bus, 'logC')
+    
+                % Default strategy
+                if ~isfield(BayesOpts.Bus, 'CStrategy')
+                    BayesOpts.Bus.CStrategy = 'max';
+                end
+               
+                % Take specified strategy
+                if BayesOpts.Bus.CStrategy == 'max'
+                    BayesOpts.Bus.logC = -max(logL);
+                elseif Opts.Bus.CStrategy == 'latest'
+                    BayesOpts.Bus.logC = -logL(end);
+                end
+    
+                sprintf("Taking constant logC: %g", BayesOpts.Bus.logC)
             end
-           
-            % Take specified strategy
-            if BayesOpts.Bus.CStrategy == 'max'
-                BayesOpts.Bus.logC = -max(logL);
-            elseif Opts.Bus.CStrategy == 'latest'
-                BayesOpts.Bus.logC = -logL(end);
-            end
-
-            sprintf("Taking constant logC: %g", BayesOpts.Bus.logC)
+        
+            BusAnalysis = bus_analysis(BayesOpts);
+        
+            % evaluate U-function on the limit state function
+            % Idea: maximize misclassification probability
+            % TODO: use a UQLab module for efficiency, but now not necessary
+            [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, BusAnalysis.Results.Bus.PostSamples);
+            cost_LSF = abs(mean_post_LSF) ./ sqrt(var_post_LSF);
+            [opt_cost, opt_index] = min(cost_LSF);
+            xopt = BusAnalysis.Results.PostSamples(opt_index, :);
+            
+            X_star(label_index,:) = xopt;
+            cost_star(label_index) = opt_cost;
         end
-    
-        BusAnalysis = bus_analysis(BayesOpts);
-    
-        % evaluate U-function on the limit state function
-        % Idea: maximize misclassification probability
-        % TODO: use a UQLab module for efficiency, but now not necessary
-        [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, BusAnalysis.Results.Bus.PostSamples);
-        cost_LSF = abs(mean_post_LSF) ./ sqrt(var_post_LSF);
-        [~, opt_index] = min(cost_LSF);
-        xopt = BusAnalysis.Results.PostSamples(opt_index, :);
-    
+
+        sprintf("All clustering steps done, applying merging strategy")
+
+        % Merge optimal points
+        % TODO: improve strategy by considering all samples
+        dbscan_weights = zeros(nb_labels,1);
+
+        for label_index =1:nb_labels
+            dbscan_weights(label_index) = sum(dbscan_labels == unique_labels(label_index)) * 1.0 / size(X,1);
+        end
+
+        [~,xopt_index] = min(dbscan_weights .* cost_star);
+        xopt = X_star(xopt_index,:);
+
         % Add to experimental design
         X = [X; xopt];
         logL = [logL; Opts.LogLikelihood(xopt) ];
 
         % Update plot
         if Opts.PlotLogLikelihood
+
+            % Get optimal label
+            val_errs = zeros(nb_labels);
+            for label_index = 1:nb_labels
+                val_errs(label_index) = pcks{label_index}.Error.Val;
+            end
+            [~, opt_label_index] = min(val_errs);
+            %opt_label = unique_labels(opt_label_index);
+
+            % Create a PCK with full set
+            PCKOpts = Opts.PCK;
+            PCKOpts.Type = 'Metamodel';
+            PCKOpts.MetaType = 'PCK';
+            PCKOpts.Mode = 'optimal';  
+            %PCKOpts.FullModel = Opts.LogLikelihood;
+            PCKOpts.Input = Opts.Prior; 
+            PCKOpts.ExpDesign.X = X(dbscan_labels ~= -1, :);
+            PCKOpts.ExpDesign.Y = logL(dbscan_labels ~= -1);
+            
+            PCKOpts.ValidationSet.X = Opts.Validation.PostSamples;
+            PCKOpts.ValidationSet.Y = Opts.Validation.PostLogLikelihood;
+    
+            %logL_PCK = uq_createModel(PCKOpts, '-private');
+            logL_PCK = pcks{opt_label_index};
+
+            sprintf("PCK LOO error: %g", logL_PCK.Error.LOO)
+            sprintf("PCK Validation error: %g", logL_PCK.Error.Val)
+
             set(post_valid_plot, 'XData', Opts.Validation.PostLogLikelihood, 'YData', uq_evalModel(logL_PCK, Opts.Validation.PostSamples));
             set(prior_valid_plot, 'XData', Opts.Validation.PriorLogLikelihood, 'YData', uq_evalModel(logL_PCK, Opts.Validation.PriorSamples));
             set(logLhist, 'Data', logL);

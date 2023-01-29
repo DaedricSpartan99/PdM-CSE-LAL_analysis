@@ -126,8 +126,10 @@ LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subs
 LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
 LALOpts.MaximumEvaluations = 80;
-LALOpts.ExpDesign.InitEval = 10;
+LALOpts.ExpDesign.InitEval = 20;
 LALOpts.PlotLogLikelihood = true;
+LALOpts.dbscanQuantile = 0.1;
+LALOpts.dbscanMinpts = 5;
 %LALOpts.CStrategy = 'max';
 
 %LALOpts.PCK.PCE.Degree = 2:2:12;
