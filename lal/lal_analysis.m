@@ -41,6 +41,10 @@ function LALAnalysis = lal_analysis(Opts)
         Opts.PlotLogLikelihood = false;
     end
 
+    if ~isfield(Opts, 'dbscanQuantile')
+        Opts.dbscanQuantile = 'auto';
+    end
+
     % plot setup
     if Opts.PlotLogLikelihood
         figure
@@ -101,9 +105,48 @@ function LALAnalysis = lal_analysis(Opts)
         dbscan_kD = pdist2(X,X,'euc','Smallest',dbscan_minpts);
         
         dbscan_kD_sorted = sort(dbscan_kD(end,:));
-        dbscan_epsilon = quantile(dbscan_kD_sorted,Opts.dbscanQuantile);
 
-        dbscan_labels = dbscan(X,dbscan_epsilon,dbscan_minpts);
+        if Opts.dbscanQuantile == 'auto'
+            
+            sprintf("dbscanQuantile not specified, optimizing it")
+
+            dbscan_midpoint = 0.5;
+            dbscan_extension = 0.5;
+            dbscan_grid_size = 20;
+
+            for reduction = 1:4
+
+                quantile_range = [max(dbscan_midpoint - dbscan_extension,0),min(dbscan_midpoint + dbscan_extension,1)];
+
+                quantiles = linspace(quantile_range(1), quantile_range(2),dbscan_grid_size);
+                nb_labels = zeros(dbscan_grid_size,1);
+
+                for iq = 1:dbscan_grid_size
+                    
+                    dbscan_epsilon = quantile(dbscan_kD_sorted,quantiles(iq));
+                    dbscan_labels = dbscan([X,logL],dbscan_epsilon,dbscan_minpts);
+                    unique_labels = sort(unique(dbscan_labels));
+                    unique_labels = unique_labels(2:end); % Skip outliers
+                    nb_labels(iq) = length(unique_labels);
+                end
+
+                if length(unique(nb_labels)) == 1
+                    break
+                end
+
+                [~, midpoint_index] = max(nb_labels);
+                dbscan_midpoint = quantiles(midpoint_index);
+                dbscan_extension = dbscan_extension / 2;
+            end
+
+            dbscan_epsilon = quantile(dbscan_kD_sorted,dbscan_midpoint);
+            sprintf("Optimal number of clusters found: %d, with quantile %f", max(nb_labels), dbscan_midpoint)
+        else
+            dbscan_epsilon = quantile(dbscan_kD_sorted,Opts.dbscanQuantile);
+        end
+
+        % Finalize with an actual scan
+        dbscan_labels = dbscan([X,logL],dbscan_epsilon,dbscan_minpts);
 
         unique_labels = sort(unique(dbscan_labels));
         unique_labels = unique_labels(2:end); % Skip outliers
@@ -122,9 +165,19 @@ function LALAnalysis = lal_analysis(Opts)
             label = unique_labels(label_index);
             X_label = X(dbscan_labels == label,:);
             logL_label = logL(dbscan_labels == label);
+
+            % Clean logL outliers if enough data
+            % TODO: not enough, check size
+            if sum(logL_label > quantile(logL_label,0.3)) > 5
+                X_label = X_label(logL_label > quantile(logL_label,0.3),:);
+                logL_label = logL_label(logL_label > quantile(logL_label,0.3),:);
+            end
             
             % Construct a PC-Kriging surrogate of the log-likelihood
-            PCKOpts = Opts.PCK;
+            if isfield(Opts, 'PCK')
+                PCKOpts = Opts.PCK;
+            end
+
             PCKOpts.Type = 'Metamodel';
             PCKOpts.MetaType = 'PCK';
             PCKOpts.Mode = 'optimal';  
@@ -192,10 +245,12 @@ function LALAnalysis = lal_analysis(Opts)
         dbscan_weights = zeros(nb_labels,1);
 
         for label_index =1:nb_labels
-            dbscan_weights(label_index) = sum(dbscan_labels == unique_labels(label_index)) * 1.0 / size(X,1);
+            %dbscan_weights(label_index) = sum(dbscan_labels == unique_labels(label_index)) * 1.0 / size(X,1);
+            dbscan_weights(label_index) = exp(max(logL(dbscan_labels == unique_labels(label_index))) + Opts.Bus.logC);
         end
 
         [~,xopt_index] = min(dbscan_weights .* cost_star);
+        %[~,xopt_index] = min(cost_star);
         xopt = X_star(xopt_index,:);
 
         % Add to experimental design
@@ -214,7 +269,7 @@ function LALAnalysis = lal_analysis(Opts)
             %opt_label = unique_labels(opt_label_index);
 
             % Create a PCK with full set
-            PCKOpts = Opts.PCK;
+            %PCKOpts = Opts.PCK;
             PCKOpts.Type = 'Metamodel';
             PCKOpts.MetaType = 'PCK';
             PCKOpts.Mode = 'optimal';  
