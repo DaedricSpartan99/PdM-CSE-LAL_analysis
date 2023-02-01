@@ -45,6 +45,10 @@ function LALAnalysis = lal_analysis(Opts)
         Opts.dbscanQuantile = 'auto';
     end
 
+    if ~isfield(Opts, 'lsfEvaluations')
+        Opts.lsfEvaluations = 10;
+    end
+
     % plot setup
     if Opts.PlotLogLikelihood
         figure
@@ -77,7 +81,7 @@ function LALAnalysis = lal_analysis(Opts)
         ylim(check_interval)
 
         ax3 = nexttile;
-        logLhist = histogram(ax3, logL);
+        logLhist = histogram(ax3, logL, 12);
         title(ax3, 'Experimental design emplacement')
         xlabel('Log-likelihood')
 
@@ -102,7 +106,7 @@ function LALAnalysis = lal_analysis(Opts)
 
         % TODO: cross validate minpts and quantile, maximize number
         dbscan_minpts = Opts.dbscanMinpts;
-        dbscan_kD = pdist2(X,X,'euc','Smallest',dbscan_minpts);
+        dbscan_kD = pdist2([X,logL],[X,logL],'euc','Smallest',dbscan_minpts);
         
         dbscan_kD_sorted = sort(dbscan_kD(end,:));
 
@@ -154,10 +158,32 @@ function LALAnalysis = lal_analysis(Opts)
 
         sprintf("Clusters found: %d", nb_labels)
 
+        % Avoid high-likelihood outliers (misclassified)
+        logL_high = quantile(logL, 0.8);
+
+        out_mask = (dbscan_labels == -1) & (logL > logL_high);
+        sprintf("Number of misclassified outliers: %d", sum(out_mask))
+
+        % Put outliers in the most appropriate cluster (minimize distance)
+        outliers = X(out_mask,:);
+        outmindist = zeros(size(outliers,1), nb_labels);
+
+        for label_index = 1:nb_labels
+            pD = pdist2(outliers, X(dbscan_labels == unique_labels(label_index),:), 'euclidean');
+
+            outmindist(:, label_index) = min(pD, [], 2);
+        end
+
+        [~,outmindist_index] = min(outmindist, [], 2); 
+        
+        dbscan_labels(out_mask) = unique_labels(outmindist_index);
+
         % Collect best options
-        X_star = zeros(nb_labels, size(X,2));
-        cost_star = zeros(nb_labels,1);
+        XP_star = cell(nb_labels, 1);
+        X_star = cell(nb_labels, 1);
         pcks = cell(nb_labels,1);
+        lsf = cell(nb_labels,1);
+        cost_lsf = cell(nb_labels,1);
 
         for label_index = 1:nb_labels
 
@@ -230,28 +256,63 @@ function LALAnalysis = lal_analysis(Opts)
             % Idea: maximize misclassification probability
             % TODO: use a UQLab module for efficiency, but now not necessary
             [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, BusAnalysis.Results.Bus.PostSamples);
-            cost_LSF = abs(mean_post_LSF) ./ sqrt(var_post_LSF);
-            [opt_cost, opt_index] = min(cost_LSF);
-            xopt = BusAnalysis.Results.PostSamples(opt_index, :);
+            cost_LSF = abs(mean_post_LSF) ./ (sqrt(var_post_LSF).^1.0);
+            [~, opt_index] = mink(cost_LSF, Opts.lsfEvaluations);
+            xp_opt = BusAnalysis.Results.Bus.PostSamples(opt_index, :);
             
-            X_star(label_index,:) = xopt;
-            cost_star(label_index) = opt_cost;
+            XP_star{label_index} = xp_opt;
+            X_star{label_index} = BusAnalysis.Results.PostSamples(opt_index, :);
+            lsf{label_index} = BusAnalysis.Results.Bus.LSF;
+            cost_lsf{label_index} = cost_LSF(opt_index);
         end
 
         sprintf("All clustering steps done, applying merging strategy")
 
         % Merge optimal points
-        % TODO: improve strategy by considering all samples
         dbscan_weights = zeros(nb_labels,1);
-
+        U_cost = zeros(nb_labels, Opts.lsfEvaluations);
+        
         for label_index =1:nb_labels
-            %dbscan_weights(label_index) = sum(dbscan_labels == unique_labels(label_index)) * 1.0 / size(X,1);
-            dbscan_weights(label_index) = exp(max(logL(dbscan_labels == unique_labels(label_index))) + Opts.Bus.logC);
+
+            % compute strata probabilities
+            %dbscan_weights(label_index) = sum(dbscan_labels == unique_labels(label_index)) * 1.0 / size(X,1);  
+            
+            % Weighted by likelihood value
+            logL_label = logL(dbscan_labels == unique_labels(label_index)) + Opts.Bus.logC;
+            dbscan_weights(label_index) = sum(exp(logL_label));
         end
 
-        [~,xopt_index] = min(dbscan_weights .* cost_star);
-        %[~,xopt_index] = min(cost_star);
-        xopt = X_star(xopt_index,:);
+        % Take most misclassified
+        %dbscan_weights = 
+
+        % normalize weights
+        dbscan_weights = dbscan_weights ./ sum(dbscan_weights);
+
+        for j = 1:nb_labels
+            
+            %cost_LSF = zeros(Opts.lsfEvaluations, nb_labels);
+                
+            % Eval Opts.lsfEvaluations samples
+            %for l = 1:nb_labels
+            %    [mean_post_LSF, var_post_LSF] = uq_evalModel(lsf{l}, XP_star{j});
+            %    cost_LSF(:,l) = abs(mean_post_LSF) ./ sqrt(var_post_LSF);
+            %end
+            
+            % Eval weighted cost
+            %U_cost(j,:) = transpose(normcdf(-cost_LSF) * dbscan_weights);
+
+            % Eval uncorrelated cost
+            U_cost(j,:) = dbscan_weights(j) ./ cost_lsf{j};
+        end
+
+        % Minimize column-wise, find rows where minimum lie
+        [U_cost_mins, xopt_label_index] = max(U_cost);
+
+        % Minimize row-wise, find column of minimum
+        [~, xopt_sample_index] = max(U_cost_mins);
+
+        % Get optimal point, removing the 
+        xopt = X_star{xopt_label_index(xopt_sample_index)}(xopt_sample_index,:);
 
         % Add to experimental design
         X = [X; xopt];
@@ -268,33 +329,29 @@ function LALAnalysis = lal_analysis(Opts)
             [~, opt_label_index] = min(val_errs);
             %opt_label = unique_labels(opt_label_index);
 
-            % Create a PCK with full set
-            %PCKOpts = Opts.PCK;
-            PCKOpts.Type = 'Metamodel';
-            PCKOpts.MetaType = 'PCK';
-            PCKOpts.Mode = 'optimal';  
-            %PCKOpts.FullModel = Opts.LogLikelihood;
-            PCKOpts.Input = Opts.Prior; 
-            PCKOpts.ExpDesign.X = X(dbscan_labels ~= -1, :);
-            PCKOpts.ExpDesign.Y = logL(dbscan_labels ~= -1);
-            
-            PCKOpts.ValidationSet.X = Opts.Validation.PostSamples;
-            PCKOpts.ValidationSet.Y = Opts.Validation.PostLogLikelihood;
-    
-            %logL_PCK = uq_createModel(PCKOpts, '-private');
-            logL_PCK = pcks{opt_label_index};
+            prior_eval = zeros(size(Opts.Validation.PostSamples,1),nb_labels);
+            post_eval = zeros(size(Opts.Validation.PriorSamples,1),nb_labels);
+
+            for label_index = 1:nb_labels
+                logL_PCK = pcks{opt_label_index};
+                post_eval(:,label_index) = uq_evalModel(logL_PCK, Opts.Validation.PostSamples);
+                prior_eval(:, label_index) = uq_evalModel(logL_PCK, Opts.Validation.PriorSamples);
+            end
 
             sprintf("PCK LOO error: %g", logL_PCK.Error.LOO)
             sprintf("PCK Validation error: %g", logL_PCK.Error.Val)
 
-            set(post_valid_plot, 'XData', Opts.Validation.PostLogLikelihood, 'YData', uq_evalModel(logL_PCK, Opts.Validation.PostSamples));
-            set(prior_valid_plot, 'XData', Opts.Validation.PriorLogLikelihood, 'YData', uq_evalModel(logL_PCK, Opts.Validation.PriorSamples));
+            set(post_valid_plot, 'XData', Opts.Validation.PostLogLikelihood, 'YData', post_eval * dbscan_weights);
+            set(prior_valid_plot, 'XData', Opts.Validation.PriorLogLikelihood, 'YData', prior_eval * dbscan_weights);
             set(logLhist, 'Data', logL);
 
             W = pca(X);
             T = X * W(:,1:2);
-            set(pca_scatter, 'XData',T(:,1), 'YData', T(:,2), "CData", logL)
-            set(pca_colorbar, 'Limits', [min(logL), max(logL)])
+
+            in_logL_mask = logL > quantile(logL,0.2);
+
+            set(pca_scatter, 'XData',T(in_logL_mask,1), 'YData', T(in_logL_mask,2), "CData", logL(in_logL_mask))
+            set(pca_colorbar, 'Limits', [min(logL(in_logL_mask)), max(logL(in_logL_mask))])
             %pca_scatter = scatter(T(:,1), T(:,2), "ColorVariable", logL, 'Filled')
 
             drawnow
