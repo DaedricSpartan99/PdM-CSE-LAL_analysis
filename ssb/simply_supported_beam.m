@@ -57,7 +57,7 @@ DiscrepancyOpts(1).Parameters = var(myData.y);
 
 BayesOpts.Type = 'Inversion';
 BayesOpts.Data = myData;
-%BayesOpts.Discrepancy = DiscrepancyOpts;
+BayesOpts.Discrepancy = DiscrepancyOpts;
 
 refBayesAnalysis = uq_createAnalysis(BayesOpts);
 
@@ -81,19 +81,19 @@ LALOpts.Bus.logC = -max(post_logL_samples); % best value: -max log(L)
 LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 60;
-LALOpts.ExpDesign.InitEval = 10;
+LALOpts.MaximumEvaluations = 40;
+LALOpts.ExpDesign.InitEval = 20;
 LALOpts.PlotLogLikelihood = true;
 %LALOpts.dbscanQuantile = 0.2;
-LALOpts.dbscanMinpts = 7;
-LALOpts.lsfEvaluations = 50;
+LALOpts.dbscanMinpts = 10;
+LALOpts.lsfEvaluations = 1;
 
 %LALOpts.PCK.PCE.Degree = 2:8;
 %LALOpts.PCK.PCE.Method = 'LARS';
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
-%LALOpts.PCK.Kriging.Corr.Family = 'Gaussian';
+%LALOpts.PCK.Kriging.Corr.Family = 'Linear';
 %LALOpts.PCK.Kriging.Corr.Family = 'Matern-5_2';
 LALOpts.PCK.Kriging.Corr.Type = 'Separable';
 %LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';

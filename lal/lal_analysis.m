@@ -90,10 +90,38 @@ function LALAnalysis = lal_analysis(Opts)
         T = X * W(:,1:2);
         pca_scatter = scatter(ax4, T(:,1), T(:,2), 20, logL, 'Filled')
         pca_colorbar = colorbar(ax4)
-        title('Experimental design PCA')
-        xlabel('x1')
-        ylabel('x2')
-        
+        title(ax4, 'Experimental design PCA')
+        xlabel(ax4, 'x1')
+        ylabel(ax4, 'x2')
+
+        drawnow
+
+        % clusters's dashboard
+
+        figure
+        tiledlayout(2,2)
+
+        ax5 = nexttile;
+        scatter(ax5, T(:,1), T(:,2), 20, logL, 'Filled')
+        title(ax5, 'Clusters in exp. design PCA')
+        xlabel(ax5, 'x1')
+        ylabel(ax5, 'x2')
+
+        ax6 = nexttile;
+        pck_error_bar = bar(ax6, [-1,], [0,0]);
+        title(ax6, 'PCK errors for each cluster')
+        xlabel(ax6, 'Cluster label')
+        ylabel(ax6, 'PCK LOO/Validation error')
+        legend(pck_error_bar, {'LOO'; 'Post-Val'})
+        set(ax6, 'YScale', 'log')
+
+        ax7 = nexttile;
+        pck_weight_bar = bar(ax7, [-1,], [1]);
+        title(ax7, 'PCK weight for each cluster')
+        xlabel(ax7, 'Cluster label')
+        ylabel(ax7, 'Weight')
+        legend(pck_weight_bar, {'Weight'})
+
         drawnow
     end
 
@@ -103,10 +131,11 @@ function LALAnalysis = lal_analysis(Opts)
     for i = 1:Opts.MaximumEvaluations
 
         % Get clusters
+        cluster_target = X;
 
         % TODO: cross validate minpts and quantile, maximize number
         dbscan_minpts = Opts.dbscanMinpts;
-        dbscan_kD = pdist2([X,logL],[X,logL],'euc','Smallest',dbscan_minpts);
+        dbscan_kD = pdist2(cluster_target,cluster_target,'euc','Smallest',dbscan_minpts);
         
         dbscan_kD_sorted = sort(dbscan_kD(end,:));
 
@@ -128,7 +157,7 @@ function LALAnalysis = lal_analysis(Opts)
                 for iq = 1:dbscan_grid_size
                     
                     dbscan_epsilon = quantile(dbscan_kD_sorted,quantiles(iq));
-                    dbscan_labels = dbscan([X,logL],dbscan_epsilon,dbscan_minpts);
+                    dbscan_labels = dbscan(cluster_target,dbscan_epsilon,dbscan_minpts);
                     unique_labels = sort(unique(dbscan_labels));
                     unique_labels = unique_labels(2:end); % Skip outliers
                     nb_labels(iq) = length(unique_labels);
@@ -150,7 +179,7 @@ function LALAnalysis = lal_analysis(Opts)
         end
 
         % Finalize with an actual scan
-        dbscan_labels = dbscan([X,logL],dbscan_epsilon,dbscan_minpts);
+        dbscan_labels = dbscan(cluster_target,dbscan_epsilon,dbscan_minpts);
 
         unique_labels = sort(unique(dbscan_labels));
         unique_labels = unique_labels(2:end); % Skip outliers
@@ -278,8 +307,14 @@ function LALAnalysis = lal_analysis(Opts)
             %dbscan_weights(label_index) = sum(dbscan_labels == unique_labels(label_index)) * 1.0 / size(X,1);  
             
             % Weighted by likelihood value
-            logL_label = logL(dbscan_labels == unique_labels(label_index)) + Opts.Bus.logC;
-            dbscan_weights(label_index) = sum(exp(logL_label));
+            %logL_label = logL(dbscan_labels == unique_labels(label_index)) + Opts.Bus.logC;
+            %dbscan_weights(label_index) = sum(exp(logL_label));
+
+            % Equal weight
+            %dbscan_weights(label_index) = 1.;
+
+            % LOO error weighted
+            dbscan_weights(label_index) = pcks{label_index}.Error.LOO;
         end
 
         % Take most misclassified
@@ -354,6 +389,31 @@ function LALAnalysis = lal_analysis(Opts)
             set(pca_colorbar, 'Limits', [min(logL(in_logL_mask)), max(logL(in_logL_mask))])
             %pca_scatter = scatter(T(:,1), T(:,2), "ColorVariable", logL, 'Filled')
 
+            cla(ax5)
+            hold(ax5, 'on')
+            label_mask = (dbscan_labels == -1) & in_logL_mask(1:end-1);
+            scatter(ax5, T(label_mask,1), T(label_mask,2), 'Filled', 'DisplayName','-1')
+            for label_index = 1:nb_labels
+                label_mask = dbscan_labels == unique_labels(label_index);
+                scatter(ax5, T(label_mask,1), T(label_mask,2), 'Filled', 'DisplayName',sprintf('%d', unique_labels(label_index)))
+            end
+            hold(ax5, 'off')
+            title(ax5, 'Clusters in exp. design PCA')
+            xlabel(ax5, 'x1')
+            ylabel(ax5, 'x2')
+            legend(ax5)
+
+            pcks_errors = zeros(nb_labels,2);
+            for k = 1:nb_labels
+                pcks_errors(k,1) = pcks{k}.Error.LOO;
+                pcks_errors(k,2) = pcks{k}.Error.Val;
+            end
+         
+            set(pck_error_bar(1), 'XData', unique_labels, 'YData', pcks_errors(:,1));
+            set(pck_error_bar(2), 'XData', unique_labels, 'YData', pcks_errors(:,2));
+
+            set(pck_weight_bar, 'XData', unique_labels, 'YData', dbscan_weights);
+
             drawnow
         end
     end
@@ -363,4 +423,7 @@ function LALAnalysis = lal_analysis(Opts)
     LALAnalysis.ExpDesign.LogLikelihood = logL;
     LALAnalysis.BusAnalysis = BusAnalysis;
     LALAnalysis.Opts = Opts;
+
+    % Prompt done
+    sprintf("Analysis done.")
 end

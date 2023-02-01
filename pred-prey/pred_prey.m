@@ -129,7 +129,7 @@ LALOpts.MaximumEvaluations = 70;
 LALOpts.ExpDesign.InitEval = 21;
 LALOpts.PlotLogLikelihood = true;
 %LALOpts.dbscanQuantile = 0.1;
-LALOpts.dbscanMinpts = 5;
+LALOpts.dbscanMinpts = 8;
 LALOpts.lsfEvaluations = 1;
 %LALOpts.CStrategy = 'max';
 
@@ -138,7 +138,7 @@ LALOpts.lsfEvaluations = 1;
 %LALOpts.PCK.Optim.Method = 'CMAES';
 LALOpts.PCK.Kriging.Corr.Type = 'Separable';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
-%LALOpts.PCK.Kriging.Corr.Family = 'Gaussian';
+LALOpts.PCK.Kriging.Corr.Family = 'Linear';
 %LALOpts.PCK.Display = 'verbose';
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
