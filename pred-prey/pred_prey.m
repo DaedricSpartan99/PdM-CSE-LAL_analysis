@@ -110,14 +110,23 @@ uq_postProcessInversionMCMC(refBayesAnalysis);
 
 %% post sample exctraction and clean up
 
-M = size(refBayesAnalysis.Results.PostProc.PostSample,2);
+M = size(refBayesAnalysis.Results.PostProc.PostSample,2); % number of time-steps
+Solver.MCMC.NChains = refBayesAnalysis.Internal.Solver.MCMC.NChains;
 
-post_samples = reshape(refBayesAnalysis.Results.PostProc.PostSample(end,:,:), M, Solver.MCMC.NChains)';
-post_logL_samples = refBayesAnalysis.Results.PostProc.PostLogLikeliEval(end,:)';
+post_samples = permute(refBayesAnalysis.Results.PostProc.PostSample, [1, 3, 2]);
+post_samples = reshape(post_samples, [], M);
+post_logL_samples = reshape(refBayesAnalysis.Results.PostProc.PostLogLikeliEval, [], 1);
 
 post_samples = post_samples(post_logL_samples > quantile(post_logL_samples, 0.1), :);
 post_logL_samples = post_logL_samples(post_logL_samples > quantile(post_logL_samples, 0.1));
 post_samples_size = size(post_samples, 1); 
+
+% prepare prior samples
+prior_samples = uq_getSample(refBayesAnalysis.Internal.FullPrior, post_samples_size);
+prior_logL_samples = refBayesAnalysis.LogLikelihood(prior_samples);
+
+prior_samples = prior_samples(prior_logL_samples > quantile(prior_logL_samples, 0.1), :);
+prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL_samples, 0.1));
 
 %% Bayesian analysis
 
@@ -126,14 +135,14 @@ LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subs
 LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
 LALOpts.MaximumEvaluations = 80;
-LALOpts.ExpDesign.InitEval = 10;
+LALOpts.ExpDesign.InitEval = 150;
 LALOpts.PlotLogLikelihood = true;
 %LALOpts.CStrategy = 'max';
 
 %LALOpts.PCK.PCE.Degree = 2:2:12;
-%LALOpts.PCK.PCE.Method = 'LARS';
+LALOpts.PCK.PCE.Method = 'LARS';
 %LALOpts.PCK.Optim.Method = 'CMAES';
-LALOpts.PCK.Kriging.Corr.Type = 'Separable';
+%LALOpts.PCK.Kriging.Corr.Type = 'Separable';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
 %LALOpts.PCK.Kriging.Corr.Family = 'Gaussian';
 %LALOpts.PCK.Display = 'verbose';
@@ -143,8 +152,8 @@ LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;
-LALOpts.Validation.PriorSamples = uq_getSample(LALOpts.Prior, post_samples_size);
-LALOpts.Validation.PriorLogLikelihood = refBayesAnalysis.LogLikelihood(LALOpts.Validation.PriorSamples);
+LALOpts.Validation.PriorSamples = prior_samples;
+LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
 LALAnalysis = lal_analysis(LALOpts);
 
