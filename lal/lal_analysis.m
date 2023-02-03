@@ -89,17 +89,24 @@ function LALAnalysis = lal_analysis(Opts)
         drawnow
     end
 
+    if isfield(Opts, 'StoreBusResults') && Opts.StoreBusResults
+        LALAnalysis.lsfEvaluations = cell(Opts.MaximumEvaluations,1);
+    end
+
     %post_input = Opts.Prior;
     
     % Begin iterations
     for i = 1:Opts.MaximumEvaluations
 
         % Address instabilities in the experimental design (0.05 quantile)
-        %if ~isfiled(Opts, 'cleanOutliers')   
-        %end
-        in_logL_mask = logL > quantile(logL,0.00);
-        X_cleaned = X(in_logL_mask,:);
-        logL_cleaned = logL(in_logL_mask);
+        if isfield(Opts, 'cleanQuantile')   
+            in_logL_mask = logL > quantile(logL,Opts.cleanQuantile);
+        else
+            in_logL_mask = ones(size(logL,1),1);
+        end
+
+        %X_cleaned = X(in_logL_mask,:);
+        %logL_cleaned = logL(in_logL_mask);
             
         % Construct a PC-Kriging surrogate of the log-likelihood
         PCKOpts = Opts.PCK;
@@ -108,17 +115,22 @@ function LALAnalysis = lal_analysis(Opts)
         PCKOpts.Mode = 'optimal';  
         %PCKOpts.FullModel = Opts.LogLikelihood;
         PCKOpts.Input = Opts.Prior; 
-        PCKOpts.ExpDesign.X = X_cleaned;
-        PCKOpts.ExpDesign.Y = logL_cleaned;
+        PCKOpts.ExpDesign.X = X;
+        PCKOpts.ExpDesign.Y = logL;
         
-        PCKOpts.ValidationSet.X = Opts.Validation.PostSamples;
-        PCKOpts.ValidationSet.Y = Opts.Validation.PostLogLikelihood;
+        if isfield(Opts, 'Validation')
+            PCKOpts.ValidationSet.X = Opts.Validation.PostSamples;
+            PCKOpts.ValidationSet.Y = Opts.Validation.PostLogLikelihood;
+        end
 
         logL_PCK = uq_createModel(PCKOpts, '-private');
 
         sprintf("Iteration number: %d", i)
         sprintf("PCK LOO error: %g", logL_PCK.Error.LOO)
-        sprintf("PCK Validation error: %g", logL_PCK.Error.Val)
+
+        if isfield(Opts, 'Validation')
+            sprintf("PCK Validation error: %g", logL_PCK.Error.Val)
+        end
         
         % TODO: Determine optimal c = 1 / max(L)
 
@@ -149,7 +161,7 @@ function LALAnalysis = lal_analysis(Opts)
         end
     
         BusAnalysis = bus_analysis(BayesOpts);
-    
+
         % evaluate U-function on the limit state function
         % Idea: maximize misclassification probability
         % TODO: use a UQLab module for efficiency, but now not necessary
@@ -162,9 +174,21 @@ function LALAnalysis = lal_analysis(Opts)
         X = [X; xopt];
         logL = [logL; Opts.LogLikelihood(xopt) ];
 
-        if abs(logL(end) - min(logL)) < eps
-            sprintf("Found unconvenient point, logL = %g", logL(end))
+        % Store result as history
+        LALAnalysis.OptPoints(i).X = xopt;
+        LALAnalysis.OptPoints(i).logL = logL(end);
+        LALAnalysis.OptPoints(i).lsf = cost_LSF(opt_index);
+
+        if isfield(Opts, 'StoreBusResults') && Opts.StoreBusResults
+            % Store in results
+            LALAnalysis.BusAnalysis(i) = BusAnalysis;
+            % Store evaluations
+            LALAnalysis.lsfEvaluations{i} = cost_LSF;
         end
+
+        %if abs(logL(end) - min(logL)) < eps
+        %    sprintf("Found unconvenient point, logL = %g", logL(end))
+        %end
 
         % Update plot
         if Opts.PlotLogLikelihood
@@ -185,6 +209,5 @@ function LALAnalysis = lal_analysis(Opts)
     % Store results
     LALAnalysis.ExpDesign.X = X;
     LALAnalysis.ExpDesign.LogLikelihood = logL;
-    LALAnalysis.BusAnalysis = BusAnalysis;
     LALAnalysis.Opts = Opts;
 end
