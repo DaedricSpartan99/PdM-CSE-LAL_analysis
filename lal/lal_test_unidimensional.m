@@ -14,8 +14,48 @@ PriorInput = uq_createInput(PriorOpts);
 
 %% Likelihood definition
 
+% peaks position
+y = [1.5, -1., -0.5];
+
+% peaks extension
+std_disc = [0.1, 0.05, 0.02];
+
+% distance scaling
+a = 1.5;
+
 % test singular function
-log_likelihood = @(x) log(abs(sin(4*(x+eps) - 4)./(4*(x+eps) - 4)));
+log_likelihood = @(x) max(log(mean(normpdf((y-a*x) ./ std_disc) ./ std_disc, 2)), -200);
+%log_likelihood = @(x) log(abs(sin(4*(x+eps) - 4)./(4*(x+eps) - 4)));
+
+%% Analytical solution
+
+post_means = a * y ./ (a^2 + std_disc.^2);
+post_std = std_disc ./ sqrt(a^2 + std_disc.^2);
+
+Z = mean(normpdf(y./sqrt(a^2 + std_disc.^2)) ./ sqrt(a^2 + std_disc.^2), 2);
+posterior = @(x) mean(normpdf((x - post_means) ./ post_std) .* normpdf(y ./ sqrt(a^2 + std_disc.^2)) ./ std_disc, 2) / Z;
+
+
+%% Analytical solution plot
+
+% validation set
+xplot = linspace(-5, 5, 1000);
+
+% validation
+sum(abs(posterior(xplot') - exp(log_likelihood(xplot')) .* normpdf(xplot') ./ Z))
+trapz(posterior(xplot'), -xplot')
+trapz(exp(log_likelihood(xplot')) .* normpdf(xplot') ./ Z, -xplot')
+
+figure
+hold on
+plot(xplot, normpdf(xplot), 'DisplayName', 'Prior')
+plot(xplot, posterior(xplot'), 'DisplayName', 'Posterior')
+%plot(xplot, exp(log_likelihood(xplot')) .* normpdf(xplot') ./ Z, 'DisplayName', 'Validation')
+hold off
+title('Prior vs Analytical posterior')
+xlabel('X')
+ylabel('Distribution')
+legend
 
 %% Create experimental design
 
@@ -35,7 +75,7 @@ xplot = linspace(-5, 5, 1000);
 figure
 scatter(LALOpts.ExpDesign.X, LALOpts.ExpDesign.LogLikelihood, 'Filled', 'DisplayName', 'Experimental design')
 hold on
-plot(xplot, log_likelihood(xplot), 'DisplayName', 'Real log-likelihood')         
+plot(xplot', log_likelihood(xplot'), 'DisplayName', 'Real log-likelihood')         
 hold off
 title('Initial state')
 xlabel('X')
@@ -45,13 +85,14 @@ legend
 drawnow
 
 
-%% Run Analysis
+%% Run First Analysis (peak complection)
 
-LALOpts.Bus.logC = 0.; % best value: -max log(L) 
-LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
-LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
+LALOpts.Bus.logC = 0;%-1.71; % best value: -max log(L) 
+%LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
+%LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 100;
+LALOpts.MaximumEvaluations = 10;
+%LALOpts.Bus.CStrategy = 'max';
 
 %LALOpts.PCK.PCE.Degree = 0:2:12;
 LALOpts.PCK.PCE.Method = 'LARS';
@@ -64,9 +105,52 @@ LALOpts.PCK.PCE.Method = 'LARS';
 LALOpts.LogLikelihood = log_likelihood;
 LALOpts.Prior = PriorInput;
 
+%LALOpts.StoreBusResults = true;
+
+LALAnalysis = lal_analysis(LALOpts);
+first_exp = LALAnalysis.ExpDesign;
+
+%% Update experimental design and run explorative Analysis
+
+clear LALOpts
+
+LALOpts.ExpDesign = first_exp;
+ 
+%LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
+%LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
+%LALOpts.Bus.MaxSampleSize = 1e5;
+LALOpts.MaximumEvaluations = 60;
+LALOpts.Bus.CStrategy = 'delaunay';
+
+LALOpts.PCK.PCE.Method = 'LARS';
+
+LALOpts.LogLikelihood = log_likelihood;
+LALOpts.Prior = PriorInput;
+
 LALOpts.StoreBusResults = true;
 
 LALAnalysis = lal_analysis(LALOpts);
+second_exp = LALAnalysis.ExpDesign;
+
+%% Finalize analysis (new peaks complection)
+
+LALOpts.ExpDesign = second_exp;
+ 
+LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
+LALOpts.Bus.BatchSize = 5e4;                             % Number of samples for Subset simulation
+LALOpts.Bus.MaxSampleSize = 1e6;
+LALOpts.MaximumEvaluations = 15;
+LALOpts.Bus.CStrategy = 'refine';
+
+LALOpts.PCK.PCE.Method = 'LARS';
+
+LALOpts.LogLikelihood = log_likelihood;
+LALOpts.Prior = PriorInput;
+
+LALOpts.StoreBusResults = true;
+
+LALAnalysis = lal_analysis(LALOpts);
+
 
 %% Final state plot
 
@@ -78,7 +162,7 @@ figure
 
 p = fill([xplot, fliplr(xplot)],lconf,'red', 'FaceAlpha',0.3, 'EdgeColor', 'none');
 hold on
-plot(xplot, log_likelihood(xplot), 'DisplayName', 'Real log-likelihood')
+plot(xplot', log_likelihood(xplot'), 'DisplayName', 'Real log-likelihood')
 plot(xplot, lpck_mean, 'DisplayName', 'Surrogate log-likelihood')
 scatter(LALAnalysis.ExpDesign.X, LALAnalysis.ExpDesign.LogLikelihood, 'Filled', 'DisplayName', 'Experimental design')
 scatter(init_X, init_logL, 'Filled', 'DisplayName', 'Initial experimental design')
@@ -90,22 +174,20 @@ legend()
 
 %% Prior vs Posterior plot
 
-prior_plot = normpdf(xplot);
+prior_plot = normpdf(xplot');
 
-ref_posterior = exp(log_likelihood(xplot) + log(prior_plot));
-ref_evidence = trapz(xplot, ref_posterior);
-ref_posterior = ref_posterior / ref_evidence;
+ref_posterior = posterior(xplot');
 
 lal_evidence = LALAnalysis.BusAnalysis(end).Results.Evidence;
-lal_posterior = exp(lpck_mean' + log(prior_plot)) / lal_evidence;
+lal_posterior = exp(lpck_mean + log(prior_plot)) / lal_evidence;
 
 figure
 hold on
-plot(xplot, prior_plot, 'DisplayName', 'Prior')
-plot(xplot, ref_posterior, 'DisplayName', 'Reference posterior')
-plot(xplot, lal_posterior, 'DisplayName', 'LAL posterior') 
-scatter(LALAnalysis.ExpDesign.X, exp(LALAnalysis.ExpDesign.LogLikelihood + log(normpdf(LALAnalysis.ExpDesign.X))) / ref_evidence, 'Filled', 'DisplayName', 'Experimental design')
-scatter(init_X, exp(init_logL + log(normpdf(init_X))) / ref_evidence, 'Filled', 'DisplayName', 'Initial experimental design')
+plot(xplot', prior_plot, 'DisplayName', 'Prior')
+plot(xplot', ref_posterior, 'DisplayName', 'Reference posterior')
+plot(xplot', lal_posterior, 'DisplayName', 'LAL posterior') 
+scatter(LALAnalysis.ExpDesign.X, posterior(LALAnalysis.ExpDesign.X), 'Filled', 'DisplayName', 'Experimental design')
+scatter(init_X, posterior(init_X), 'Filled', 'DisplayName', 'Initial experimental design')
 hold off
 xlabel('X')
 ylabel('Probability density')
@@ -120,10 +202,10 @@ for i = 1:iterations
     evidences(i) = LALAnalysis.BusAnalysis(i).Results.Evidence;
 end
 
-weak_error = abs(evidences(2:end) - evidences(1:end-1));
+%weak_error = abs(evidences(2:end) - evidences(1:end-1));
 
 figure
-scatter(2:iterations, weak_error, 'filled')
+scatter(1:iterations, abs(evidences - Z), 'filled')
 set(gca, 'YScale', 'log')
 xlabel('Iteration')
 ylabel('|Z^n - Z^{n-1}|')
@@ -176,7 +258,7 @@ sprintf("Log-likelihood PCK convergence rate: %f", -c(1))
 %% Experimental design show
 
 figure
-histogram(LALAnalysis.ExpDesign.X, length(LALAnalysis.ExpDesign.X)/3)
+histogram(LALAnalysis.ExpDesign.X, ceil(length(LALAnalysis.ExpDesign.X)/2))
 xlabel('X')
 ylabel('Occurrencies')
 title("Experimental design show up")

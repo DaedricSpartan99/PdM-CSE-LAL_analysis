@@ -151,10 +151,30 @@ function LALAnalysis = lal_analysis(Opts)
             end
            
             % Take specified strategy
-            if BayesOpts.Bus.CStrategy == 'max'
+            if strcmp(BayesOpts.Bus.CStrategy, 'max')
                 BayesOpts.Bus.logC = -max(logL);
-            elseif Opts.Bus.CStrategy == 'latest'
+            elseif strcmp(Opts.Bus.CStrategy, 'latest')
                 BayesOpts.Bus.logC = -logL(end);
+            elseif strcmp(Opts.Bus.CStrategy, 'delaunay')
+                T = delaunayn(X);
+
+                % compute midpoints and maximize variances
+                midpoints = (X(T(:,1),:) + X(T(:,2),:)) / 2.;
+                [mmeans, mvars] = uq_evalModel(logL_PCK , midpoints);
+                
+                [~, varindex] = maxk(mvars, 10);
+                midpoints = midpoints(varindex,:);
+
+                % sort by greatest mean
+                [~, meanindex] = sort(mmeans(varindex), 'descend');
+                midpoints = midpoints(meanindex,:);
+
+                BayesOpts.Bus.logC = -uq_evalModel(logL_PCK , midpoints(1,:));
+
+            elseif strcmp(Opts.Bus.CStrategy, 'refine')
+
+                % a little bit higher than peaks
+                BayesOpts.Bus.logC = -max(logL * 1.5);
             end
 
             sprintf("Taking constant logC: %g", BayesOpts.Bus.logC)

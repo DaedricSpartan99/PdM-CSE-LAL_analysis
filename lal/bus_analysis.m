@@ -45,9 +45,19 @@ function BayesianAnalysis = bus_analysis(BayesOpts)
     %% Setup and run the Subset simulation
     SSOpts.Type = 'Reliability';
     SSOpts.Method = 'Subset';
-    SSOpts.Subset.p0 = BayesOpts.Bus.p0;
-    SSOpts.Simulation.BatchSize = BayesOpts.Bus.BatchSize;
-    %SSOpts.Simulation.MaxSampleSize = BayesOpts.Bus.MaxSampleSize;
+
+    if isfield(BayesOpts.Bus, 'p0')
+        SSOpts.Subset.p0 = BayesOpts.Bus.p0;
+    end
+
+    if isfield(BayesOpts.Bus, 'BatchSize')
+        SSOpts.Simulation.BatchSize = BayesOpts.Bus.BatchSize;
+    end
+
+    if isfield(BayesOpts.Bus, 'MaxSampleSize')
+        SSOpts.Simulation.MaxSampleSize = BayesOpts.Bus.MaxSampleSize;
+    end
+
     SSOpts.Model = uq_createModel(LSFOpts, '-private');
     SSOpts.Input = uq_createInput(BusPriorOpts, '-private');
     SSimAnalysis = uq_createAnalysis(SSOpts, '-private');
