@@ -83,17 +83,18 @@ prior_logL_samples = refBayesAnalysis.LogLikelihood(prior_samples);
 prior_samples = prior_samples(prior_logL_samples > quantile(prior_logL_samples, 0.1), :);
 prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL_samples, 0.1));
 
-%% Bayesian analysis
+%% Bayesian analysis (tuning first peaks step)
 
-LALOpts.Bus.logC = -max(post_logL_samples); % best value: -max log(L) 
-LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
-LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
+%LALOpts.Bus.logC = 0; %-max(post_logL_samples); % best value: -max log(L) 
+%LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
+%LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
 LALOpts.MaximumEvaluations = 50;
-LALOpts.ExpDesign.InitEval = 100;
+LALOpts.ExpDesign.InitEval = 20;
 LALOpts.PlotLogLikelihood = true;
+LALOpts.Bus.CStrategy = 'max';
 
-%LALOpts.PCK.PCE.Degree = 2:8;
+LALOpts.PCK.PCE.Degree = 0:5;
 LALOpts.PCK.PCE.Method = 'LARS';
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
@@ -113,9 +114,57 @@ LALOpts.Validation.PostLogLikelihood = post_logL_samples;
 LALOpts.Validation.PriorSamples = prior_samples;
 LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
+FirstLALAnalysis = lal_analysis(LALOpts);
+
+%% Bayesian analysis (explorative step)
+
+LALOpts.MaximumEvaluations = 30;
+LALOpts.Bus.CStrategy = 'delaunay';
+LALOpts.ExpDesign = FirstLALAnalysis.ExpDesign;
+LALOpts.PlotLogLikelihood = true;
+
+LALOpts.PCK.PCE.Degree = 0:5;
+LALOpts.PCK.PCE.Method = 'LARS';
+
+LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
+LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
+
+LALOpts.Validation.PostSamples = post_samples;
+LALOpts.Validation.PostLogLikelihood = post_logL_samples;
+LALOpts.Validation.PriorSamples = prior_samples;
+LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
+
+SecondLALAnalysis = lal_analysis(LALOpts);
+
+%% Refinement step (tune peaks)
+
+clear LALOpts
+
+LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
+LALOpts.Bus.BatchSize = 5e4;                             % Number of samples for Subset simulation
+LALOpts.Bus.MaxSampleSize = 1e6;
+
+LALOpts.MaximumEvaluations = 15;
+LALOpts.ExpDesign = SecondLALAnalysis.ExpDesign;
+LALOpts.Bus.CStrategy = 'refine';
+LALOpts.PlotLogLikelihood = true;
+
+LALOpts.PCK.PCE.Degree = 0:5;
+LALOpts.PCK.PCE.Method = 'LARS';
+
+LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
+LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
+
+LALOpts.StoreBusResults = true;
+
+LALOpts.Validation.PostSamples = post_samples;
+LALOpts.Validation.PostLogLikelihood = post_logL_samples;
+LALOpts.Validation.PriorSamples = prior_samples;
+LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
+
 LALAnalysis = lal_analysis(LALOpts);
 
-pck = LALAnalysis.BusAnalysis.Opts.LogLikelihood;
+pck = LALAnalysis.BusAnalysis(end).Opts.LogLikelihood;
 
 %% Analyisis
 
