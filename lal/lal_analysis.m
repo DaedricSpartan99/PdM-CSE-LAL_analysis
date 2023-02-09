@@ -80,8 +80,12 @@ function LALAnalysis = lal_analysis(Opts)
         ax4 = nexttile;
         W = pca(X);
         T = X * W(:,1:2);
+        Tpost = Opts.Validation.PostSamples * W(:,1:2);
+        hold on
         pca_scatter = scatter(ax4, T(:,1), T(:,2), 20, logL, 'Filled')
         pca_colorbar = colorbar(ax4)
+        pca_post_scatter = scatter(ax4, Tpost(:,1), Tpost(:,2), 5)
+        hold off
         title(ax4, 'Experimental design PCA')
         xlabel(ax4, 'x1')
         ylabel(ax4, 'x2')
@@ -101,12 +105,13 @@ function LALAnalysis = lal_analysis(Opts)
         % Address instabilities in the experimental design (0.05 quantile)
         if isfield(Opts, 'cleanQuantile')   
             in_logL_mask = logL > quantile(logL,Opts.cleanQuantile);
+            X_cleaned = X(in_logL_mask,:);
+            logL_cleaned = logL(in_logL_mask);
         else
-            in_logL_mask = ones(size(logL,1),1);
-        end
 
-        X_cleaned = X(in_logL_mask,:);
-        logL_cleaned = logL(in_logL_mask);
+            X_cleaned = X;
+            logL_cleaned = logL;
+        end
             
         % Construct a PC-Kriging surrogate of the log-likelihood
         if isfield(Opts, 'PCK')
@@ -118,6 +123,7 @@ function LALAnalysis = lal_analysis(Opts)
         PCKOpts.Mode = 'optimal';  
         %PCKOpts.FullModel = Opts.LogLikelihood;
         PCKOpts.Input = Opts.Prior; 
+        PCKOpts.isVectorized = true;
         PCKOpts.ExpDesign.X = X_cleaned;
         PCKOpts.ExpDesign.Y = logL_cleaned;
         
@@ -166,8 +172,8 @@ function LALAnalysis = lal_analysis(Opts)
                 case 'maxpck' 
 
                     % get maximum of experimental design
-                    [maxl_logL, maxl_index] = max(logL);
-                    maxl_x0 = X(maxl_index, :);
+                    [maxl_logL, maxl_index] = max(logL_cleaned);
+                    maxl_x0 = X_cleaned(maxl_index, :);
 
                     % determine c from experimental design
                     c_zero_variance = -maxl_logL;
@@ -180,12 +186,12 @@ function LALAnalysis = lal_analysis(Opts)
 
                     % Verify if converged and it's in the convex hull of
                     % the points
-                    inside_hull = all(maxl_x > min(X)) && all(maxl_x < max(X));
+                    inside_hull = all(maxl_x > min(X_cleaned)) && all(maxl_x < max(X_cleaned));
 
                     if ~inside_hull
                         %sprintf('MaxPCK: potential unstable point, adjusting boundaries')
-                        maxl_x = max(maxl_x, min(X));
-                        maxl_x = min(maxl_x, max(X));
+                        maxl_x = max(maxl_x, min(X_cleaned));
+                        maxl_x = min(maxl_x, max(X_cleaned));
 
                         maxl_pck = f(maxl_x);
                     end
@@ -200,18 +206,22 @@ function LALAnalysis = lal_analysis(Opts)
 
                 case 'delaunay'
 
+                    if isfield(Opts.Bus, 'Delaunay') && ~isfield(Opts.Bus.Delaunay, 'maxk')
+                        Opts.Bus.Delaunay.maxk = 10;
+                    end
+
                     % Rescale experimental design
                     %stdX = (X - mean(X)) ./ std(X);
                     %stdX = X ./ max(X);
-                    T = delaunayn(X, {'QbB'});
+                    T = delaunayn(X_cleaned, {'QbB'});
     
                     % compute midpoints and maximize variances
-                    W = reshape(X(T,:), size(T,1), size(T,2), []);
+                    W = reshape(X_cleaned(T,:), size(T,1), size(T,2), []);
                     Wm = mean(W, 2);
                     midpoints = permute(Wm, [1,3,2]);
                     [mmeans, mvars] = uq_evalModel(logL_PCK , midpoints);
                     
-                    [~, varindex] = maxk(mvars, 10);
+                    [~, varindex] = maxk(mvars, Opts.Bus.Delaunay.maxk);
                     midpoints = midpoints(varindex,:);
     
                     % sort by greatest mean
@@ -265,9 +275,9 @@ function LALAnalysis = lal_analysis(Opts)
         % Update plot
         if Opts.PlotLogLikelihood
             
-            in_logL_mask = logL > quantile(logL,0.1);
-            X_cleaned = X(in_logL_mask,:);
-            logL_cleaned = logL(in_logL_mask);
+            %in_logL_mask = logL > quantile(logL,0.1);
+            %X_cleaned = X(in_logL_mask,:);
+            %logL_cleaned = logL(in_logL_mask);
 
             set(post_valid_plot, 'XData', Opts.Validation.PostLogLikelihood, 'YData', uq_evalModel(logL_PCK, Opts.Validation.PostSamples));
             set(prior_valid_plot, 'XData', Opts.Validation.PriorLogLikelihood, 'YData', uq_evalModel(logL_PCK, Opts.Validation.PriorSamples));
@@ -276,7 +286,9 @@ function LALAnalysis = lal_analysis(Opts)
 
             W = pca(X_cleaned);
             T = X_cleaned * W(:,1:2);
+            Tpost = Opts.Validation.PostSamples * W(:,1:2);
             set(pca_scatter, 'XData',T(:,1), 'YData', T(:,2), "CData", logL_cleaned)
+            set(pca_post_scatter, 'XData', Tpost(:,1), 'YData', Tpost(:,2))
             set(pca_colorbar, 'Limits', [min(logL_cleaned), max(logL_cleaned)])
             %pca_scatter = scatter(T(:,1), T(:,2), "ColorVariable", logL, 'Filled')
 

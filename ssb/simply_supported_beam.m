@@ -90,7 +90,7 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
 LALOpts.MaximumEvaluations = 5;
-LALOpts.ExpDesign.InitEval = 20;
+LALOpts.ExpDesign.InitEval = 15;
 LALOpts.PlotLogLikelihood = true;
 LALOpts.Bus.CStrategy = 'max';
 
@@ -118,17 +118,22 @@ FirstLALAnalysis = lal_analysis(LALOpts);
 
 %% Switch bayesian analysis (explorative and refinement steps)
 
-refine_steps = 20;
-explore_steps = 5;
-max_switches = 4;
+refine_steps = 15;
+explore_steps = 10;
+max_switches = 1;
 
-LALOpts.PCK.PCE.Degree = 1:5;
+LALOpts.PCK.PCE.Degree = 1:7;
 LALOpts.PCK.PCE.Method = 'LARS';
+
+LALOpts.Bus.BatchSize = 5000;
+LALOpts.Bus.MaxSampleSize = 500000;
+
+%LALOpts.PCK.Kriging.Corr.Type = 'Separable';
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 
-LALOpts.cleanQuantile = 0.3;
+LALOpts.cleanQuantile = 0.1;
 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;
@@ -157,7 +162,7 @@ end
 
 LALAnalysis = RefineLALAnalysis;
 
-pck = LALAnalysis.BusAnalysis(end).Opts.LogLikelihood;
+%pck = LALAnalysis.BusAnalysis(end).Opts.LogLikelihood;
 
 %% Analyisis
 

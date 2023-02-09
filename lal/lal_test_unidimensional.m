@@ -87,12 +87,12 @@ drawnow
 
 %% Run First Analysis (peak complection)
 
-LALOpts.Bus.logC = 0;%-1.71; % best value: -max log(L) 
+%LALOpts.Bus.logC = 0;%-1.71; % best value: -max log(L) 
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
 LALOpts.MaximumEvaluations = 10;
-%LALOpts.Bus.CStrategy = 'max';
+LALOpts.Bus.CStrategy = 'max';
 
 %LALOpts.PCK.PCE.Degree = 0:2:12;
 LALOpts.PCK.PCE.Method = 'LARS';

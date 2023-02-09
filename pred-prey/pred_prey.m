@@ -128,23 +128,29 @@ prior_logL_samples = refBayesAnalysis.LogLikelihood(prior_samples);
 prior_samples = prior_samples(prior_logL_samples > quantile(prior_logL_samples, 0.1), :);
 prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL_samples, 0.1));
 
-%% Bayesian analysis
+%% Bayesian analysis (tuning first peaks step)
 
-LALOpts.Bus.logC = -max(post_logL_samples); % best value: -max log(L) 
-LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
-LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
+clear LALOpts
+
+%LALOpts.Bus.logC = 0; %-max(post_logL_samples); % best value: -max log(L) 
+%LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
+%LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 80;
-LALOpts.ExpDesign.InitEval = 150;
+LALOpts.MaximumEvaluations = 10;
+LALOpts.ExpDesign.InitEval = 30;
 LALOpts.PlotLogLikelihood = true;
-%LALOpts.CStrategy = 'max';
+LALOpts.Bus.CStrategy = 'maxpck';
 
-%LALOpts.PCK.PCE.Degree = 2:2:12;
+LALOpts.PCK.PCE.Degree = 1;
 LALOpts.PCK.PCE.Method = 'LARS';
+%LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
-%LALOpts.PCK.Kriging.Corr.Type = 'Separable';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
 %LALOpts.PCK.Kriging.Corr.Family = 'Gaussian';
+%LALOpts.PCK.Kriging.Corr.Family = 'Matern-3_2';
+%LALOpts.PCK.Kriging.Corr.Type = 'Separable';
+%LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
+%LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
@@ -155,7 +161,53 @@ LALOpts.Validation.PostLogLikelihood = post_logL_samples;
 LALOpts.Validation.PriorSamples = prior_samples;
 LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
-LALAnalysis = lal_analysis(LALOpts);
+FirstLALAnalysis = lal_analysis(LALOpts);
+
+%% Switch bayesian analysis (explorative and refinement steps)
+
+refine_steps = 8;
+explore_steps = 4;
+max_switches = 7;
+
+LALOpts.PCK.PCE.Degree = 1:27;
+LALOpts.PCK.PCE.Method = 'LARS';
+
+LALOpts.Bus.BatchSize = 5000;
+LALOpts.Bus.MaxSampleSize = 500000;
+
+LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
+LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
+
+LALOpts.cleanQuantile = 0.05;
+
+LALOpts.Validation.PostSamples = post_samples;
+LALOpts.Validation.PostLogLikelihood = post_logL_samples;
+LALOpts.Validation.PriorSamples = prior_samples;
+LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
+
+exp_design = FirstLALAnalysis.ExpDesign;
+
+for sw = 1:max_switches
+
+    LALOpts.MaximumEvaluations = explore_steps;
+    LALOpts.Bus.CStrategy = 'delaunay';
+    LALOpts.Bus.Delaunay.maxk = 10;
+    LALOpts.ExpDesign = exp_design;
+    LALOpts.PlotLogLikelihood = false;
+
+    ExploreLALAnalysis = lal_analysis(LALOpts);
+    
+    LALOpts.MaximumEvaluations = refine_steps;
+    LALOpts.ExpDesign = ExploreLALAnalysis.ExpDesign;
+    LALOpts.Bus.CStrategy = 'maxpck';
+    LALOpts.PlotLogLikelihood = true;
+
+    RefineLALAnalysis = lal_analysis(LALOpts);
+    exp_design = RefineLALAnalysis.ExpDesign;
+end
+
+LALAnalysis = RefineLALAnalysis;
+
 
 %% Analysis: plot of experimental design and real log-likelihood on marginal 5 and 6
 
