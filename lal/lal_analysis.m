@@ -41,6 +41,9 @@ function LALAnalysis = lal_analysis(Opts)
         Opts.PlotLogLikelihood = false;
     end
 
+    %Opts.Validation.PostLogLikelihood = max(Opts.Validation.PostLogLikelihood, -1200);
+    %Opts.Validation.PriorLogLikelihood = max(Opts.Validation.PriorLogLikelihood, -1200);
+
     % plot setup
     if Opts.PlotLogLikelihood
         figure
@@ -104,7 +107,7 @@ function LALAnalysis = lal_analysis(Opts)
 
         % Address instabilities in the experimental design (0.05 quantile)
         if isfield(Opts, 'cleanQuantile')   
-            in_logL_mask = logL > quantile(logL,Opts.cleanQuantile);
+            in_logL_mask = logL > -2000;%quantile(logL,Opts.cleanQuantile);
             X_cleaned = X(in_logL_mask,:);
             logL_cleaned = logL(in_logL_mask);
         else
@@ -221,11 +224,32 @@ function LALAnalysis = lal_analysis(Opts)
                     midpoints = permute(Wm, [1,3,2]);
                     [mmeans, mvars] = uq_evalModel(logL_PCK , midpoints);
                     
+                    % get only a certain number of max variance
                     [~, varindex] = maxk(mvars, Opts.Bus.Delaunay.maxk);
                     midpoints = midpoints(varindex,:);
-    
+                    mmeans = mmeans(varindex);
+
+                    % compute gradient
+                    %h = 0.001 * median(X_cleaned);
+                    %grads = zeros(size(midpoints,1), 1);
+                    %for k = 1:size(midpoints,2)
+                    %    dx = zeros(size(midpoints,1),size(midpoints,2));
+                    %    dx(:,k) = h(k);
+                    %    eval_high = uq_evalModel(logL_PCK, midpoints + dx);
+                    %    eval_low = uq_evalModel(logL_PCK, midpoints - dx);
+
+                    %    grad = (eval_high - eval_low) / (2*h(k));
+
+                    %    grads = grads + grad.^2;
+                    %end
+
+                    % sort by gradient
+                    %[~, gradindex] = maxk(grads, 5);
+                    %midpoints = midpoints(gradindex,:);
+                    %mmeans = mmeans(gradindex);
+
                     % sort by greatest mean
-                    [~, meanindex] = sort(mmeans(varindex), 'descend');
+                    [~, meanindex] = sort(mmeans, 'descend');
                     midpoints = midpoints(meanindex,:);
     
                     BayesOpts.Bus.logC = -uq_evalModel(logL_PCK , midpoints(1,:));
@@ -274,10 +298,6 @@ function LALAnalysis = lal_analysis(Opts)
 
         % Update plot
         if Opts.PlotLogLikelihood
-            
-            %in_logL_mask = logL > quantile(logL,0.1);
-            %X_cleaned = X(in_logL_mask,:);
-            %logL_cleaned = logL(in_logL_mask);
 
             set(post_valid_plot, 'XData', Opts.Validation.PostLogLikelihood, 'YData', uq_evalModel(logL_PCK, Opts.Validation.PostSamples));
             set(prior_valid_plot, 'XData', Opts.Validation.PriorLogLikelihood, 'YData', uq_evalModel(logL_PCK, Opts.Validation.PriorSamples));

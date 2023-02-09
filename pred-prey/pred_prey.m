@@ -22,35 +22,37 @@ PriorOpts.Marginals(1).Name = ('alpha');
 PriorOpts.Marginals(1).Type = 'LogNormal';
 PriorOpts.Marginals(1).Moments = [1 0.1];
 %PriorOpts.Marginals(1).Type = 'Constant';
-%PriorOpts.Marginals(1).Parameters = 0.6035;
+%PriorOpts.Marginals(1).Parameters = 0.5524;
 
 PriorOpts.Marginals(2).Name = ('beta');
 PriorOpts.Marginals(2).Type = 'LogNormal';
 PriorOpts.Marginals(2).Moments = [0.05 0.005];
 %PriorOpts.Marginals(2).Type = 'Constant';
-%PriorOpts.Marginals(2).Parameters = 0.0360;
+%PriorOpts.Marginals(2).Parameters = 0.0309;
 
 PriorOpts.Marginals(3).Name = ('gamma');
 PriorOpts.Marginals(3).Type = 'LogNormal';
 PriorOpts.Marginals(3).Moments = [1 0.1];
 %PriorOpts.Marginals(3).Type = 'Constant';
-%PriorOpts.Marginals(3).Parameters = 0.9072;
+%PriorOpts.Marginals(3).Parameters = 0.8929;
 
 PriorOpts.Marginals(4).Name = ('delta');
 PriorOpts.Marginals(4).Type = 'LogNormal';
 PriorOpts.Marginals(4).Moments = [0.05 0.005];
 %PriorOpts.Marginals(4).Type = 'Constant';
-%PriorOpts.Marginals(4).Parameters = 0.0296;
+%PriorOpts.Marginals(4).Parameters = 0.0279;
 
 PriorOpts.Marginals(5).Name = ('initH');
 PriorOpts.Marginals(5).Type = 'LogNormal';
 PriorOpts.Marginals(5).Parameters = [log(10) 1];
+%PriorOpts.Marginals(4).Type = 'Constant';
+%PriorOpts.Marginals(4).Parameters = 32.2464;
 
 PriorOpts.Marginals(6).Name = ('initL');
 PriorOpts.Marginals(6).Type = 'LogNormal';
 PriorOpts.Marginals(6).Parameters = [log(10) 1];
 %PriorOpts.Marginals(6).Type = 'Constant';
-%PriorOpts.Marginals(6).Parameters = 5.1753;
+%PriorOpts.Marginals(6).Parameters = 4.5109;
 
 myPriorDist = uq_createInput(PriorOpts);
 
@@ -81,10 +83,10 @@ SigmaDist2 = uq_createInput(SigmaOpts);
 % Choose otion
 DiscrepancyOpts(1).Type = 'Gaussian';
 %DiscrepancyOpts(1).Prior = SigmaDist1;
-DiscrepancyOpts(1).Parameters = 21.9068;
+DiscrepancyOpts(1).Parameters = 12.4961;
 DiscrepancyOpts(2).Type = 'Gaussian';
 %DiscrepancyOpts(2).Prior = SigmaDist2;
-DiscrepancyOpts(2).Parameters = 12.9847;
+DiscrepancyOpts(2).Parameters = 8.4746;
 
 
 %% Reference model definition
@@ -136,12 +138,12 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 10;
-LALOpts.ExpDesign.InitEval = 30;
+LALOpts.MaximumEvaluations = 1;
+LALOpts.ExpDesign.InitEval = 60;
 LALOpts.PlotLogLikelihood = true;
 LALOpts.Bus.CStrategy = 'maxpck';
 
-LALOpts.PCK.PCE.Degree = 1;
+LALOpts.PCK.PCE.Degree = 4:5;
 LALOpts.PCK.PCE.Method = 'LARS';
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
@@ -153,6 +155,8 @@ LALOpts.PCK.PCE.Method = 'LARS';
 %LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
 
+LALOpts.cleanQuantile = 0.05;
+
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 
@@ -163,13 +167,60 @@ LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
 FirstLALAnalysis = lal_analysis(LALOpts);
 
+%ql = quantile(FirstLALAnalysis.ExpDesign.LogLikelihood, 0.05);
+%FirstLALAnalysis.ExpDesign.X = FirstLALAnalysis.ExpDesign.X(FirstLALAnalysis.ExpDesign.LogLikelihood > ql,:);
+%FirstLALAnalysis.ExpDesign.LogLikelihood = FirstLALAnalysis.ExpDesign.LogLikelihood(FirstLALAnalysis.ExpDesign.LogLikelihood > ql);
+
 %% Switch bayesian analysis (explorative and refinement steps)
 
-refine_steps = 8;
-explore_steps = 4;
-max_switches = 7;
+refine_steps = 15;
+explore_steps = 5;
+max_switches = 4;
 
-LALOpts.PCK.PCE.Degree = 1:27;
+
+LALOpts.PCK.PCE.Method = 'LARS';
+
+LALOpts.Bus.BatchSize = 5000;
+LALOpts.Bus.MaxSampleSize = 500000;
+
+LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
+LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
+
+LALOpts.Validation.PostSamples = post_samples;
+LALOpts.Validation.PostLogLikelihood = post_logL_samples;
+LALOpts.Validation.PriorSamples = prior_samples;
+LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
+
+exp_design = FirstLALAnalysis.ExpDesign;
+
+for sw = 1:max_switches
+
+    LALOpts.MaximumEvaluations = explore_steps;
+    LALOpts.Bus.CStrategy = 'delaunay';
+    LALOpts.Bus.Delaunay.maxk = 10;
+    LALOpts.PCK.PCE.Degree = 4:5;
+    LALOpts.ExpDesign = exp_design;
+    LALOpts.PlotLogLikelihood = false;
+    LALOpts.cleanQuantile = 0.01;
+
+    ExploreLALAnalysis = lal_analysis(LALOpts);
+    
+    LALOpts.MaximumEvaluations = refine_steps;
+    LALOpts.ExpDesign = ExploreLALAnalysis.ExpDesign;
+    LALOpts.Bus.CStrategy = 'maxpck';
+    LALOpts.PlotLogLikelihood = true;
+    LALOpts.PCK.PCE.Degree = 4:5;
+    LALOpts.cleanQuantile = 0.01;
+
+    RefineLALAnalysis = lal_analysis(LALOpts);
+    exp_design = RefineLALAnalysis.ExpDesign;
+end
+
+%% Finalize
+
+clear LALOpts
+
+%LALOpts.PCK.PCE.Degree = 1;
 LALOpts.PCK.PCE.Method = 'LARS';
 
 LALOpts.Bus.BatchSize = 5000;
@@ -185,32 +236,15 @@ LALOpts.Validation.PostLogLikelihood = post_logL_samples;
 LALOpts.Validation.PriorSamples = prior_samples;
 LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
-exp_design = FirstLALAnalysis.ExpDesign;
+LALOpts.MaximumEvaluations = 10;
+LALOpts.ExpDesign = exp_design;
+LALOpts.Bus.CStrategy = 'maxpck';
+%LALOpts.Bus.Delaunay.maxk = 15;
+LALOpts.PlotLogLikelihood = true;
 
-for sw = 1:max_switches
-
-    LALOpts.MaximumEvaluations = explore_steps;
-    LALOpts.Bus.CStrategy = 'delaunay';
-    LALOpts.Bus.Delaunay.maxk = 10;
-    LALOpts.ExpDesign = exp_design;
-    LALOpts.PlotLogLikelihood = false;
-
-    ExploreLALAnalysis = lal_analysis(LALOpts);
-    
-    LALOpts.MaximumEvaluations = refine_steps;
-    LALOpts.ExpDesign = ExploreLALAnalysis.ExpDesign;
-    LALOpts.Bus.CStrategy = 'maxpck';
-    LALOpts.PlotLogLikelihood = true;
-
-    RefineLALAnalysis = lal_analysis(LALOpts);
-    exp_design = RefineLALAnalysis.ExpDesign;
-end
-
-LALAnalysis = RefineLALAnalysis;
-
+LALAnalysis = lal_analysis(LALOpts);
 
 %% Analysis: plot of experimental design and real log-likelihood on marginal 5 and 6
-
 
 
 %figure

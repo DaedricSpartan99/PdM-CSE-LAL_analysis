@@ -59,7 +59,7 @@ legend
 
 %% Create experimental design
 
-init_eval = 20;
+init_eval = 30;
 
 LALOpts.ExpDesign.X = uq_getSample(PriorInput, init_eval);
 LALOpts.ExpDesign.LogLikelihood = log_likelihood(LALOpts.ExpDesign.X);
@@ -119,15 +119,18 @@ LALOpts.ExpDesign = first_exp;
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e5;
-LALOpts.MaximumEvaluations = 60;
-LALOpts.Bus.CStrategy = 'delaunay';
+LALOpts.MaximumEvaluations = 30;
+LALOpts.Bus.CStrategy = 'maxpck';
+%LALOpts.Bus.Delaunay.maxk = 10;
+
+%LALOpts.PlotLogLikelihood = true;
 
 LALOpts.PCK.PCE.Method = 'LARS';
 
 LALOpts.LogLikelihood = log_likelihood;
 LALOpts.Prior = PriorInput;
 
-LALOpts.StoreBusResults = true;
+%LALOpts.StoreBusResults = true;
 
 LALAnalysis = lal_analysis(LALOpts);
 second_exp = LALAnalysis.ExpDesign;
@@ -140,7 +143,7 @@ LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subs
 LALOpts.Bus.BatchSize = 5e4;                             % Number of samples for Subset simulation
 LALOpts.Bus.MaxSampleSize = 1e6;
 LALOpts.MaximumEvaluations = 15;
-LALOpts.Bus.CStrategy = 'refine';
+LALOpts.Bus.CStrategy = 'maxpck';
 
 LALOpts.PCK.PCE.Method = 'LARS';
 
