@@ -85,7 +85,7 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 10;
+init_eval = 40;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
 LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval);
@@ -179,12 +179,12 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 30;
+LALOpts.MaximumEvaluations = 10;
 LALOpts.ExpDesign.X = init_X;
 LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
 LALOpts.Bus.CStrategy = 'maxpck';
-LALOpts.MinCostSamples = 10;
+LALOpts.MinCostSamples = 10;  
 
 LALOpts.PCK.PCE.Degree = 1:5;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
@@ -264,57 +264,6 @@ sgtitle('Initial state log-likelihood')
 
 drawnow
 
-%% Switch bayesian analysis (explorative and refinement steps)
-
-refine_steps = 5;
-explore_steps = 2;
-max_switches = 1;
-
-%LALOpts.PCK.Kriging.Corr.Type = 'Separable';
-
-LALOpts.Bus.BatchSize = 5000;
-LALOpts.Bus.MaxSampleSize = 500000;
-
-
-LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
-LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
-
-LALOpts.Validation.PostSamples = post_samples;
-LALOpts.Validation.PostLogLikelihood = post_logL_samples;
-LALOpts.Validation.PriorSamples = prior_samples;
-LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
-
-exp_design = FirstLALAnalysis.ExpDesign;
-
-for sw = 1:max_switches
-
-    % Setup refinement step
-    LALOpts.MaximumEvaluations = refine_steps;
-    LALOpts.ExpDesign = exp_design;
-    LALOpts.Bus.CStrategy = 'maxpck';
-    LALOpts.PlotLogLikelihood = true;
-    LALOpts.MinCostSamples = 10;
-    LALOpts.PCK.PCE.Degree = 1:5;
-    LALOpts.cleanQuantile = 0.05;
-    LALOpts.Ridge = 0.;
-
-    RefineLALAnalysis = lal_analysis(LALOpts);    
-
-    % Setup explorative steps
-    LALOpts.MaximumEvaluations = explore_steps;
-    LALOpts.Bus.CStrategy = 'delaunay';
-    LALOpts.Bus.Delaunay.maxk = 10;
-    LALOpts.PCK.PCE.Degree = 1:5;
-    LALOpts.ExpDesign = RefineLALAnalysis.ExpDesign;
-    LALOpts.PlotLogLikelihood = false;
-    LALOpts.Ridge = 0.;
-    LALOpts.Bus.MinCostSamples = 3;
-    LALOpts.cleanQuantile = 0.05;
-
-    ExploreLALAnalysis = lal_analysis(LALOpts);
-    exp_design = ExploreLALAnalysis.ExpDesign;
-end
-
 %% Finalize
 
 clear LALOpts
@@ -328,16 +277,16 @@ LALOpts.Bus.MaxSampleSize = 500000;
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 
-LALOpts.MinCostSamples = 20;
-LALOpts.cleanQuantile = 0.5;
-LALOpts.Ridge = 0.5;
+LALOpts.MinCostSamples = 10;
+LALOpts.cleanQuantile = 0.15;
+LALOpts.Ridge = 0.;
 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;
 LALOpts.Validation.PriorSamples = prior_samples;
 LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
-LALOpts.MaximumEvaluations = 30;
+LALOpts.MaximumEvaluations = 40;
 LALOpts.ExpDesign = exp_design;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Bus.Delaunay.maxk = 15;
