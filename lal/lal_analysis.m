@@ -92,12 +92,42 @@ function LALAnalysis = lal_analysis(Opts)
         title(ax4, 'Experimental design PCA')
         xlabel(ax4, 'x1')
         ylabel(ax4, 'x2')
+
+        % Histogram figure
+        figure
+        m_tile = factor(size(X,2));
+        m_tile = m_tile(1);
+        tiledlayout(size(X,2)/m_tile,m_tile)
+
+        hist_plots = cell(size(X,2),1);
+
+        for k = 1:size(X,2)
+            hist_plots{k}.ax = nexttile
+
+            hold on
+            hist_plots{k}.Prior = histogram(Opts.Validation.PriorSamples(:,k),50);
+            hist_plots{k}.Post = histogram(Opts.Validation.PostSamples(:,k),50); 
+            hist_plots{k}.SuS = histogram(Opts.Validation.PostSamples(:,k),50); 
+            hist_plots{k}.Opt = xline(mean(Opts.Validation.PostSamples(:,k)), 'LineWidth', 5);
+            hist_plots{k}.SuSMedian = xline(mean(Opts.Validation.PostSamples(:,k)),  '--b', 'LineWidth', 5);
+            hold off
+            legend('Prior', 'Posterior', 'SuS-Samples', 'Min cost point', 'SuS Median')
+            title(sprintf('Component %d',k))
+        end
         
         drawnow
     end
 
     if isfield(Opts, 'StoreBusResults') && Opts.StoreBusResults
         LALAnalysis.lsfEvaluations = cell(Opts.MaximumEvaluations,1);
+    end
+
+    if ~isfield(Opts, 'Ridge')
+        Opts.Ridge = 0.;
+    end
+
+    if ~isfield(Opts, 'MinCostSamples')
+        Opts.MinCostSamples = 3;
     end
 
     %post_input = Opts.Prior;
@@ -107,7 +137,7 @@ function LALAnalysis = lal_analysis(Opts)
 
         % Address instabilities in the experimental design (0.05 quantile)
         if isfield(Opts, 'cleanQuantile')   
-            in_logL_mask = logL > -2000;%quantile(logL,Opts.cleanQuantile);
+            in_logL_mask = logL > quantile(logL,Opts.cleanQuantile);
             X_cleaned = X(in_logL_mask,:);
             logL_cleaned = logL(in_logL_mask);
         else
@@ -229,30 +259,18 @@ function LALAnalysis = lal_analysis(Opts)
                     midpoints = midpoints(varindex,:);
                     mmeans = mmeans(varindex);
 
-                    % compute gradient
-                    %h = 0.001 * median(X_cleaned);
-                    %grads = zeros(size(midpoints,1), 1);
-                    %for k = 1:size(midpoints,2)
-                    %    dx = zeros(size(midpoints,1),size(midpoints,2));
-                    %    dx(:,k) = h(k);
-                    %    eval_high = uq_evalModel(logL_PCK, midpoints + dx);
-                    %    eval_low = uq_evalModel(logL_PCK, midpoints - dx);
-
-                    %    grad = (eval_high - eval_low) / (2*h(k));
-
-                    %    grads = grads + grad.^2;
-                    %end
-
-                    % sort by gradient
-                    %[~, gradindex] = maxk(grads, 5);
-                    %midpoints = midpoints(gradindex,:);
-                    %mmeans = mmeans(gradindex);
-
                     % sort by greatest mean
                     [~, meanindex] = sort(mmeans, 'descend');
                     midpoints = midpoints(meanindex,:);
     
                     BayesOpts.Bus.logC = -uq_evalModel(logL_PCK , midpoints(1,:));
+
+                case 'maxhull'
+
+                    k = convhulln(X_cleaned, {'QbB'});
+                    W = X_cleaned(k,:);
+
+                    BayesOpts.Bus.logC = -max(uq_evalModel(logL_PCK , W));
 
                 case 'overmax'
 
@@ -271,10 +289,21 @@ function LALAnalysis = lal_analysis(Opts)
         % evaluate U-function on the limit state function
         % Idea: maximize misclassification probability
         % TODO: use a UQLab module for efficiency, but now not necessary
-        [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, BusAnalysis.Results.Bus.PostSamples);
+        px_samples = BusAnalysis.Results.Bus.PostSamples;
+        [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, px_samples);
+
+        x_medians = median(px_samples(:,2:end)); % TODO: distance from experimental design
+
+        ridge_cost = sum(abs(px_samples(:,2:end) ./ x_medians - 1),2);
         cost_LSF = abs(mean_post_LSF) ./ sqrt(var_post_LSF);
-        [~, opt_index] = min(cost_LSF);
+
+        % Take first three candidates
+        [~, opt_index] = mink(cost_LSF + Opts.Ridge * ridge_cost * median(cost_LSF), Opts.MinCostSamples);
         xopt = BusAnalysis.Results.PostSamples(opt_index, :);
+
+        % Choose the one maximizing log-likelihood
+        [~, opt_index] = max(uq_evalModel(logL_PCK, xopt));
+        xopt = xopt(opt_index,:);
     
         % Add to experimental design
         X = [X; xopt];
@@ -284,12 +313,15 @@ function LALAnalysis = lal_analysis(Opts)
         LALAnalysis.OptPoints(i).X = xopt;
         LALAnalysis.OptPoints(i).logL = logL(end);
         LALAnalysis.OptPoints(i).lsf = cost_LSF(opt_index);
+        LALAnalysis.PCK(i) = logL_PCK;
 
         if isfield(Opts, 'StoreBusResults') && Opts.StoreBusResults
             % Store in results
             LALAnalysis.BusAnalysis(i) = BusAnalysis;
             % Store evaluations
             LALAnalysis.lsfEvaluations{i} = cost_LSF;
+            % Store target
+            LALAnalysis.logC(i) = BayesOpts.Bus.logC;
         end
 
         %if abs(logL(end) - min(logL)) < eps
@@ -311,6 +343,13 @@ function LALAnalysis = lal_analysis(Opts)
             set(pca_post_scatter, 'XData', Tpost(:,1), 'YData', Tpost(:,2))
             set(pca_colorbar, 'Limits', [min(logL_cleaned), max(logL_cleaned)])
             %pca_scatter = scatter(T(:,1), T(:,2), "ColorVariable", logL, 'Filled')
+
+            % Histogram plots
+            for k = 1:size(X,2)
+                set(hist_plots{k}.SuS, 'Data', BusAnalysis.Results.PostSamples(:,k))
+                set(hist_plots{k}.Opt, 'Value', xopt(k));
+                set(hist_plots{k}.SuSMedian, 'Value', x_medians(k));
+            end
 
             drawnow
         end

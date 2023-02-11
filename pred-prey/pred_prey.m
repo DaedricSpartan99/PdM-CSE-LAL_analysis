@@ -130,6 +130,94 @@ prior_logL_samples = refBayesAnalysis.LogLikelihood(prior_samples);
 prior_samples = prior_samples(prior_logL_samples > quantile(prior_logL_samples, 0.1), :);
 prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL_samples, 0.1));
 
+%% Experimental design setup
+
+init_eval = 30;
+log_likelihood = refBayesAnalysis.LogLikelihood;
+
+LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval);
+LALOpts.ExpDesign.LogLikelihood = log_likelihood(LALOpts.ExpDesign.X);
+
+init_X = LALOpts.ExpDesign.X;
+init_logL = LALOpts.ExpDesign.LogLikelihood;
+
+%% Plot of the likelihood in components a1 and a2
+
+a1 = 1;
+a2 = 2;
+
+lq = quantile(init_logL, 0.2);
+init_Xq = init_X(init_logL > lq,:);
+init_logLq = init_logL(init_logL > lq);
+
+Hplot = linspace(min(init_Xq(:,a1)), max(init_Xq(:,a1)), 50);
+Lplot = linspace(min(init_Xq(:,a2)), max(init_Xq(:,a2)), 50);
+
+[x_grid_1, x_grid_2] = meshgrid(Hplot,Lplot);
+HL_grid = [x_grid_1(:), x_grid_2(:)];
+
+%Xplot = [0.5524, 0.0309, 0.8929, 0.0279, 0, 0];
+Xplot = mean(init_Xq);
+Xplot = [repmat(Xplot, size(HL_grid,1),1), HL_grid];
+
+Xplot(:,[a1,a2]) = HL_grid;
+
+logL_grid = log_likelihood(Xplot);
+logL_grid = reshape(logL_grid, 50, 50);
+
+
+%% Construct a PCK which fits good
+
+PCKOpts.Type = 'Metamodel';
+PCKOpts.MetaType = 'PCK';
+PCKOpts.Mode = 'optimal';  
+        
+PCKOpts.Input = refBayesAnalysis.Internal.FullPrior; 
+PCKOpts.isVectorized = true;
+PCKOpts.ExpDesign.X = init_X;
+PCKOpts.ExpDesign.Y = init_logL;
+
+%PCKOpts.PCK.PCE.Degree = 5;
+
+%LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
+%LALOpts.PCK.Optim.Method = 'CMAES';
+%LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
+%PCKOpts.PCK.Kriging.Corr.Family = 'Gaussian';
+%PCKOpts.PCK.Kriging.Corr.Family = 'Matern-5_2';
+%PCKOpts.PCK.Kriging.Corr.Type = 'Separable';
+%PCKOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
+%LALOpts.PCK.Kriging.theta = 9.999;
+%LALOpts.PCK.Display = 'verbose';
+
+PCKOpts.ValidationSet.X = prior_samples;
+PCKOpts.ValidationSet.Y = prior_logL_samples;
+
+logL_PCK = uq_createModel(PCKOpts);
+
+fprintf("---   Leave-one-out error: %f\n", logL_PCK.Error.LOO)
+fprintf("---   Validation error: %f\n", logL_PCK.Error.Val)
+
+figure
+check_interval = [min(prior_logL_samples), max(prior_logL_samples)];
+prior_evals = uq_evalModel(logL_PCK, prior_samples);
+
+hold on
+plot(check_interval , check_interval);
+scatter(prior_logL_samples, prior_evals);
+hold off
+title('Prior samples')
+ylabel('Surrogate Log-Likelihood')
+xlabel('Real Log-Likelihood')
+xlim(check_interval)
+ylim(check_interval)
+
+drawnow
+
+%logL_PCK_grid = uq_evalModel(logL_PCK, Xplot);
+%logL_PCK_grid = reshape(logL_PCK_grid, 50, 50);
+
+
+
 %% Bayesian analysis (tuning first peaks step)
 
 clear LALOpts
@@ -138,12 +226,13 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 1;
-LALOpts.ExpDesign.InitEval = 60;
+LALOpts.MaximumEvaluations = 5;
+LALOpts.ExpDesign.X = init_X;
+LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
 LALOpts.Bus.CStrategy = 'maxpck';
 
-LALOpts.PCK.PCE.Degree = 4:5;
+%LALOpts.PCK.PCE.Degree = 5;
 LALOpts.PCK.PCE.Method = 'LARS';
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
@@ -155,7 +244,7 @@ LALOpts.PCK.PCE.Method = 'LARS';
 %LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
 
-LALOpts.cleanQuantile = 0.05;
+%LALOpts.cleanQuantile = 0.05;
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
@@ -165,18 +254,63 @@ LALOpts.Validation.PostLogLikelihood = post_logL_samples;
 LALOpts.Validation.PriorSamples = prior_samples;
 LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
+LALOpts.StoreBusResults = true;
+
 FirstLALAnalysis = lal_analysis(LALOpts);
 
-%ql = quantile(FirstLALAnalysis.ExpDesign.LogLikelihood, 0.05);
-%FirstLALAnalysis.ExpDesign.X = FirstLALAnalysis.ExpDesign.X(FirstLALAnalysis.ExpDesign.LogLikelihood > ql,:);
-%FirstLALAnalysis.ExpDesign.LogLikelihood = FirstLALAnalysis.ExpDesign.LogLikelihood(FirstLALAnalysis.ExpDesign.LogLikelihood > ql);
+fprintf("---   LogC: %f\n", FirstLALAnalysis.logC(end));
+fprintf("---   Found point with likelihood: %f\n", FirstLALAnalysis.OptPoints(end).logL)
+
+
+xopt = FirstLALAnalysis.OptPoints(end).X;
+logL_PCK = FirstLALAnalysis.PCK(end);
+
+fprintf("---   The surrogate likelihood was: %f\n", uq_evalModel(logL_PCK, xopt))
+
+logL_PCK_grid = uq_evalModel(logL_PCK, Xplot);
+logL_PCK_grid = reshape(logL_PCK_grid, 50, 50);
+
+
+% plot figures
+figure
+tiledlayout(1,2)
+
+ax = nexttile;
+
+hold on
+contourf(ax, Hplot, Lplot, logL_grid);
+colorbar(ax)
+scatter(ax, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
+%surfplot.EdgeColor = 'none';
+%surfplot.FaceAlpha = 0.5;
+%surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
+%surfplot_pck.EdgeColor = 'none';
+%surfplot_pck.FaceAlpha = 0.8;
+hold off
+title('Real likelihood visualization of component 5 and 6')
+
+ax_pck = nexttile;
+
+hold on
+contourf(ax_pck, Hplot, Lplot, logL_PCK_grid);
+colorbar(ax_pck)
+scatter(ax_pck, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
+scatter(ax_pck, xopt(:,a1), xopt(:,a2), 45, "black")
+%surfplot.EdgeColor = 'none';
+%surfplot.FaceAlpha = 0.5;
+%surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
+%surfplot_pck.EdgeColor = 'none';
+%surfplot_pck.FaceAlpha = 0.8;
+hold off
+title('Surrogate PCK likelihood visualization of component 5 and 6')
+
+drawnow
 
 %% Switch bayesian analysis (explorative and refinement steps)
 
 refine_steps = 15;
 explore_steps = 5;
-max_switches = 4;
-
+max_switches = 2;
 
 LALOpts.PCK.PCE.Method = 'LARS';
 
@@ -195,25 +329,27 @@ exp_design = FirstLALAnalysis.ExpDesign;
 
 for sw = 1:max_switches
 
+    % Setup refinement step
+    LALOpts.MaximumEvaluations = refine_steps;
+    LALOpts.ExpDesign = exp_design;
+    LALOpts.Bus.CStrategy = 'maxpck';
+    LALOpts.PlotLogLikelihood = false;
+    %LALOpts.PCK.PCE.Degree = 4:5;
+    %LALOpts.cleanQuantile = 0.01;
+
+    RefineLALAnalysis = lal_analysis(LALOpts);    
+
+    % Setup explorative steps
     LALOpts.MaximumEvaluations = explore_steps;
     LALOpts.Bus.CStrategy = 'delaunay';
     LALOpts.Bus.Delaunay.maxk = 10;
-    LALOpts.PCK.PCE.Degree = 4:5;
-    LALOpts.ExpDesign = exp_design;
+    %LALOpts.PCK.PCE.Degree = 4:5;
+    LALOpts.ExpDesign = RefineLALAnalysis.ExpDesign;
     LALOpts.PlotLogLikelihood = false;
-    LALOpts.cleanQuantile = 0.01;
+    %LALOpts.cleanQuantile = 0.01;
 
     ExploreLALAnalysis = lal_analysis(LALOpts);
-    
-    LALOpts.MaximumEvaluations = refine_steps;
-    LALOpts.ExpDesign = ExploreLALAnalysis.ExpDesign;
-    LALOpts.Bus.CStrategy = 'maxpck';
-    LALOpts.PlotLogLikelihood = true;
-    LALOpts.PCK.PCE.Degree = 4:5;
-    LALOpts.cleanQuantile = 0.01;
-
-    RefineLALAnalysis = lal_analysis(LALOpts);
-    exp_design = RefineLALAnalysis.ExpDesign;
+    exp_design = ExploreLALAnalysis.ExpDesign;
 end
 
 %% Finalize
@@ -229,20 +365,64 @@ LALOpts.Bus.MaxSampleSize = 500000;
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 
-LALOpts.cleanQuantile = 0.05;
+%LALOpts.cleanQuantile = 0.05;
 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;
 LALOpts.Validation.PriorSamples = prior_samples;
 LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
-LALOpts.MaximumEvaluations = 10;
+LALOpts.MaximumEvaluations = 30;
 LALOpts.ExpDesign = exp_design;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Bus.Delaunay.maxk = 15;
 LALOpts.PlotLogLikelihood = true;
 
+LALOpts.StoreBusResults = true;
+
 LALAnalysis = lal_analysis(LALOpts);
+
+%% Plot of prior validation errors over last run
+
+iterations = LALOpts.MaximumEvaluations;
+
+pck_post_err = zeros(1,iterations);
+pck_loo_err = zeros(1,iterations);
+pck_prior_err = zeros(1,iterations);
+
+for i = 1:iterations
+    dl_prior = abs(uq_evalModel(LALAnalysis.BusAnalysis(i).Opts.LogLikelihood, prior_samples) - prior_logL_samples);
+    dl_post = abs(uq_evalModel(LALAnalysis.BusAnalysis(i).Opts.LogLikelihood, post_samples) - post_logL_samples);
+
+    pck_prior_err(i) = mean(dl_prior.^2);
+    %pck_post_err(i) = mean(exp(prior_logL_samples) .* dl.^2);
+    pck_post_err(i) = mean(dl_post.^2);
+    pck_loo_err(i) = LALAnalysis.BusAnalysis(i).Opts.LogLikelihood.Error.LOO;
+end
+
+% Fit errors
+[a,~] = polyfit(1:iterations, log10(pck_post_err), 1);
+[b,~] = polyfit(iterations/2:iterations, log10(pck_loo_err(end/2:end)), 1);
+[c,~] = polyfit(1:iterations, log10(pck_prior_err), 1);
+
+figure
+hold on
+plot(1:iterations, 10.^(c(1) .* (1:iterations) + c(2)), 'DisplayName', 'Prior error Fit')
+plot(1:iterations, 10.^(a(1) .* (1:iterations) + a(2)), 'DisplayName', 'Post error Fit')
+plot(1:iterations, 10.^(b(1) .* (1:iterations) + b(2)), 'DisplayName', 'LOO error Fit')
+scatter(1:iterations, pck_prior_err, 'filled', 'DisplayName', 'PCK prior validation error')
+scatter(1:iterations, pck_post_err, 'filled', 'DisplayName', 'PCK posterior validation error')
+scatter(1:iterations, pck_loo_err, 'filled', 'DisplayName', 'PCK LOO error')
+hold off
+set(gca, 'YScale', 'log')
+xlabel('Iteration')
+ylabel('Error')
+title('Log-Likelihood PCK error plots')
+legend('interpreter','latex')
+
+sprintf("Prior validation convergence rate: %f", -c(1))
+sprintf("Posterior validation convergence rate: %f", -a(1))
+sprintf("LOO convergence rate: %f", -b(1))
 
 %% Analysis: plot of experimental design and real log-likelihood on marginal 5 and 6
 
