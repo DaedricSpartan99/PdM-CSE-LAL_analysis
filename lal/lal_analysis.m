@@ -157,35 +157,7 @@ function LALAnalysis = lal_analysis(Opts)
         if isfield(Opts, 'cleanQuantile')   
             in_logL_mask = logL > quantile(logL,Opts.cleanQuantile);
             X_cleaned = X(in_logL_mask,:);
-            logL_cleaned = logL(in_logL_mask);
-
-            X_out = X(~in_logL_mask,:);
-            logL_out = logL(~in_logL_mask);
-
-            % Cross validate PCK with experimental design
-            [logL_out_sorted, ind] = sort(logL_out);
-            X_out_sorted = X_out(ind,:);
-            
-            PCK_cross = cell(length(X_out_sorted),1);
-            PCK_loo = zeros(length(X_out_sorted),1);
-
-            for j = 1:length(X_out_sorted)
-
-                X_cross = X_out_sorted(i:end,:);
-                logL_cross = logL_out_sorted(i:end);
-
-                PCKOpts.ExpDesign.X = [X_cross; X_cleaned];
-                PCKOpts.ExpDesign.Y = [logL_cross; logL_cleaned];
-
-                PCK_cross{j} = uq_createModel(PCKOpts, '-private');
-                PCK_loo(j) = PCK_cross{j}.Error.LOO;
-            end
-
-            % Minimize LOO error
-            [~, ind] = min(PCK_loo);
-
-            X_cleaned = [X_out_sorted(ind:end,:); X_cleaned];
-            logL_cleaned = [logL_out_sorted(ind:end); logL_cleaned];
+            logL_cleaned = logL(in_logL_mask); 
         else
 
             X_cleaned = X;
@@ -238,35 +210,42 @@ function LALAnalysis = lal_analysis(Opts)
                         % get maximum of experimental design
                         [maxl_logL, maxl_index] = max(logL_cleaned);
                         maxl_x0 = X_cleaned(maxl_index, :);
+
+                        % sample from prior distribution for other points
+                        x_prior = uq_getSample(Opts.Prior, 1000);
+
+                        qxb = quantile(x_prior, 0.05);
+                        qxu = quantile(x_prior, 0.95);
+                        x_prior = x_prior(all(x_prior > qxb & x_prior < qxu, 2), :);
+
+                        % Optimize from each point
+                        x0 = [maxl_x0; x_prior(1:10,:)];
+                        xmin = qxb;
+                        xmax = qxu;
     
                         % determine c from experimental design
                         c_zero_variance = -maxl_logL;
     
                         % define inverse log-likelihood to find the minimum of
                         f = @(x) -uq_evalModel(logL_PCK, x);
-                        
-                        % maximize surrogate log-likelihood
-                        [maxl_x, maxl_pck, found_flag] = fminsearch(f, maxl_x0);
-    
-                        % Verify if converged and it's in the convex hull of
-                        % the points
-                        inside_hull = all(maxl_x > min(X_cleaned)) && all(maxl_x < max(X_cleaned));
-    
-                        if ~inside_hull
-                            %sprintf('MaxPCK: potential unstable point, adjusting boundaries')
-                            maxl_x = max(maxl_x, min(X_cleaned));
-                            maxl_x = min(maxl_x, max(X_cleaned));
-    
-                            maxl_pck = f(maxl_x);
+
+                        opt_pck = zeros(size(x0,1),1);
+
+                        for opt_ind = 1:size(x0,1)
+
+                            % maximize surrogate log-likelihood
+                            [~, maxl_pck, found_flag] = fmincon(f, x0(opt_ind,:), [], [], [], [], xmin, xmax);
+        
+                            % Take negative log-likelihood (overestimation)
+                            if found_flag == 1
+                                opt_pck(opt_ind) = -maxl_pck;
+                            else
+                                sprintf('Found patological value of log(c) estimation, correcting with boundary point.')
+                                opt_pck(opt_ind) = -c_zero_variance;
+                            end
                         end
     
-                        % Take negative log-likelihood (overestimation)
-                        if ~found_flag
-                            sprintf('Found patological value of log(c) estimation, correcting with boundary point.')
-                            %BayesOpts.Bus.logC = min(c_zero_variance, maxl_pck);
-                        end
-    
-                        BayesOpts.Bus.logC = min(c_zero_variance, maxl_pck);
+                        BayesOpts.Bus.logC = min(c_zero_variance, -max(opt_pck));
     
                     case 'delaunay'
     
@@ -359,11 +338,11 @@ function LALAnalysis = lal_analysis(Opts)
         end
 
         % Take only posterior samples
-        qmean = 10.;
+        %qmean = 10.;
         
-        px_samples = px_samples(mean_post_LSF < qmean,:);
-        mean_post_LSF = mean_post_LSF(mean_post_LSF < qmean);
-        var_post_LSF = var_post_LSF(mean_post_LSF < qmean);
+        %px_samples = px_samples(mean_post_LSF < qmean,:);
+        %mean_post_LSF = mean_post_LSF(mean_post_LSF < qmean);
+        %var_post_LSF = var_post_LSF(mean_post_LSF < qmean);
         
         x_medians = median(px_samples(:,2:end)); % TODO: distance from experimental design
         

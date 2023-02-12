@@ -132,14 +132,18 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 20;
+init_eval = 30;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
-LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval);
+LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval, 'LHS');
 LALOpts.ExpDesign.LogLikelihood = log_likelihood(LALOpts.ExpDesign.X);
 
 init_X = LALOpts.ExpDesign.X;
 init_logL = LALOpts.ExpDesign.LogLikelihood;
+
+qinit = quantile(init_logL, 0.1);
+init_X = init_X(init_logL > qinit,:);
+init_logL = init_logL(init_logL > qinit);
 
 %% Plot of the likelihood in components a1 and a2
 
@@ -227,16 +231,16 @@ drawnow
 
 clear LALOpts
 
-%LALOpts.Bus.logC = 0; %-max(post_logL_samples); % best value: -max log(L) 
+%LALOpts.Bus.logC = 400; %-max(post_logL_samples); % best value: -max log(L) 
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 40;
+LALOpts.MaximumEvaluations = 30;
 LALOpts.ExpDesign.X = init_X;
 LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
 LALOpts.Bus.CStrategy = 'maxpck';
-LALOpts.MinCostSamples = 5;  
+LALOpts.MinCostSamples = 1;  
 
 LALOpts.PCE.Degree = 1:5;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
@@ -249,7 +253,7 @@ LALOpts.PCE.Degree = 1:5;
 %LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
 
-%LALOpts.cleanQuantile = 0.05;
+LALOpts.cleanQuantile = 0.05;
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
@@ -257,7 +261,7 @@ LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 % TODO: cross validate
 LALOpts.Ridge = 0.0;
 
-LALOpts.Bus.BatchSize = 40000;
+LALOpts.Bus.BatchSize = 10000;
 LALOpts.Bus.MaxSampleSize = 1000000;
 
 LALOpts.Validation.PostSamples = post_samples;
