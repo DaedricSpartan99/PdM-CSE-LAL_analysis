@@ -177,7 +177,7 @@ PCKOpts.isVectorized = true;
 PCKOpts.ExpDesign.X = init_X;
 PCKOpts.ExpDesign.Y = init_logL;
 
-%PCKOpts.PCK.PCE.Degree = 5;
+PCKOpts.PCK.PCE.Degree = 1:7;
 
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
@@ -233,7 +233,7 @@ LALOpts.PlotLogLikelihood = true;
 LALOpts.Bus.CStrategy = 'maxpck';
 LALOpts.MinCostSamples = 10;  
 
-LALOpts.PCK.PCE.Degree = 1:5;
+LALOpts.PCK.PCE.Degree = 1:7;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
@@ -313,7 +313,7 @@ drawnow
 
 refine_steps = 15;
 explore_steps = 5;
-max_switches = 2;
+max_switches = 0;
 
 LALOpts.PCK.PCE.Method = 'LARS';
 
@@ -359,8 +359,8 @@ end
 
 clear LALOpts
 
-%LALOpts.PCK.PCE.Degree = 1;
-LALOpts.PCK.PCE.Method = 'LARS';
+LALOpts.PCK.PCE.Degree = 1:10;
+%LALOpts.PCK.Kriging.Corr.Type = 'Separable';
 
 LALOpts.Bus.BatchSize = 5000;
 LALOpts.Bus.MaxSampleSize = 500000;
@@ -368,14 +368,16 @@ LALOpts.Bus.MaxSampleSize = 500000;
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 
-%LALOpts.cleanQuantile = 0.05;
-
+LALOpts.MinCostSamples = 10;
+LALOpts.cleanQuantile = 0.05;
+LALOpts.Ridge = 0.4;
+ 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;
 LALOpts.Validation.PriorSamples = prior_samples;
 LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
-LALOpts.MaximumEvaluations = 30;
+LALOpts.MaximumEvaluations = 50;
 LALOpts.ExpDesign = exp_design;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Bus.Delaunay.maxk = 15;
