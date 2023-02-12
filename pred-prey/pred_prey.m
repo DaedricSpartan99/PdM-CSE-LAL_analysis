@@ -132,7 +132,7 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 60;
+init_eval = 20;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
 LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval);
@@ -168,6 +168,8 @@ logL_grid = reshape(logL_grid, 50, 50);
 
 %% Construct a PCK which fits good
 
+clear PCKOpts
+
 PCKOpts.Type = 'Metamodel';
 PCKOpts.MetaType = 'PCK';
 PCKOpts.Mode = 'optimal';  
@@ -177,17 +179,20 @@ PCKOpts.isVectorized = true;
 PCKOpts.ExpDesign.X = init_X;
 PCKOpts.ExpDesign.Y = init_logL;
 
-PCKOpts.PCK.PCE.Degree = 1:7;
+PCKOpts.PCE.Degree = 1:12;
 
-%LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
-%LALOpts.PCK.Optim.Method = 'CMAES';
-%LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
-%PCKOpts.PCK.Kriging.Corr.Family = 'Gaussian';
-%PCKOpts.PCK.Kriging.Corr.Family = 'Matern-5_2';
-%PCKOpts.PCK.Kriging.Corr.Type = 'Separable';
-%PCKOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
-%LALOpts.PCK.Kriging.theta = 9.999;
-%LALOpts.PCK.Display = 'verbose';
+%PCKOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
+
+%PCKOpts.Kriging.CV.LeaveKOut = 3;
+%PCKOpts.Kriging.Optim.Method = 'CMAES';
+PCKOpts.Kriging.Optim.MaxIter = 10000;
+%PCKOpts.Kriging.Optim.Tol = 1e-5;
+%PCKOpts.Kriging.Corr.Family = 'Gaussian';
+%PCKOpts.Kriging.Corr.Family = 'Matern-3_2';
+%PCKOpts.Kriging.Corr.Type = 'Separable';
+%PCKOpts.Kriging.Corr.Type = 'ellipsoidal';
+%PCKOpts.Kriging.theta = 9.999;
+PCKOpts.Display = 'verbose';
 
 PCKOpts.ValidationSet.X = prior_samples;
 PCKOpts.ValidationSet.Y = prior_logL_samples;
@@ -226,14 +231,14 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 10;
+LALOpts.MaximumEvaluations = 40;
 LALOpts.ExpDesign.X = init_X;
 LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
 LALOpts.Bus.CStrategy = 'maxpck';
-LALOpts.MinCostSamples = 10;  
+LALOpts.MinCostSamples = 5;  
 
-LALOpts.PCK.PCE.Degree = 1:7;
+LALOpts.PCE.Degree = 1:5;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
@@ -244,13 +249,16 @@ LALOpts.PCK.PCE.Degree = 1:7;
 %LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
 
-LALOpts.cleanQuantile = 0.05;
+%LALOpts.cleanQuantile = 0.05;
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 
 % TODO: cross validate
-LALOpts.Ridge = 0;
+LALOpts.Ridge = 0.0;
+
+LALOpts.Bus.BatchSize = 40000;
+LALOpts.Bus.MaxSampleSize = 1000000;
 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;

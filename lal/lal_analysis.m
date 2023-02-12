@@ -135,35 +135,66 @@ function LALAnalysis = lal_analysis(Opts)
     % Begin iterations
     for i = 1:Opts.MaximumEvaluations
 
-        % Address instabilities in the experimental design (0.05 quantile)
-        if isfield(Opts, 'cleanQuantile')   
-            in_logL_mask = logL > quantile(logL,Opts.cleanQuantile);
-            X_cleaned = X(in_logL_mask,:);
-            logL_cleaned = logL(in_logL_mask);
-        else
-
-            X_cleaned = X;
-            logL_cleaned = logL;
-        end
-            
         % Construct a PC-Kriging surrogate of the log-likelihood
         if isfield(Opts, 'PCK')
             PCKOpts = Opts.PCK;
         end
 
+        % Create definitive PCK
         PCKOpts.Type = 'Metamodel';
         PCKOpts.MetaType = 'PCK';
         PCKOpts.Mode = 'optimal';  
         %PCKOpts.FullModel = Opts.LogLikelihood;
         PCKOpts.Input = Opts.Prior; 
         PCKOpts.isVectorized = true;
-        PCKOpts.ExpDesign.X = X_cleaned;
-        PCKOpts.ExpDesign.Y = logL_cleaned;
         
         if isfield(Opts, 'Validation')
             PCKOpts.ValidationSet.X = Opts.Validation.PostSamples;
             PCKOpts.ValidationSet.Y = Opts.Validation.PostLogLikelihood;
         end
+
+        % Address instabilities in the experimental design (0.05 quantile)
+        if isfield(Opts, 'cleanQuantile')   
+            in_logL_mask = logL > quantile(logL,Opts.cleanQuantile);
+            X_cleaned = X(in_logL_mask,:);
+            logL_cleaned = logL(in_logL_mask);
+
+            X_out = X(~in_logL_mask,:);
+            logL_out = logL(~in_logL_mask);
+
+            % Cross validate PCK with experimental design
+            [logL_out_sorted, ind] = sort(logL_out);
+            X_out_sorted = X_out(ind,:);
+            
+            PCK_cross = cell(length(X_out_sorted),1);
+            PCK_loo = zeros(length(X_out_sorted),1);
+
+            for j = 1:length(X_out_sorted)
+
+                X_cross = X_out_sorted(i:end,:);
+                logL_cross = logL_out_sorted(i:end);
+
+                PCKOpts.ExpDesign.X = [X_cross; X_cleaned];
+                PCKOpts.ExpDesign.Y = [logL_cross; logL_cleaned];
+
+                PCK_cross{j} = uq_createModel(PCKOpts, '-private');
+                PCK_loo(j) = PCK_cross{j}.Error.LOO;
+            end
+
+            % Minimize LOO error
+            [~, ind] = min(PCK_loo);
+
+            X_cleaned = [X_out_sorted(ind:end,:); X_cleaned];
+            logL_cleaned = [logL_out_sorted(ind:end); logL_cleaned];
+        else
+
+            X_cleaned = X;
+            logL_cleaned = logL;
+        end
+
+        % Create definitive PCK
+        PCKOpts.ExpDesign.X = X_cleaned;
+        PCKOpts.ExpDesign.Y = logL_cleaned;
 
         logL_PCK = uq_createModel(PCKOpts, '-private');
 
@@ -188,123 +219,169 @@ function LALAnalysis = lal_analysis(Opts)
         BayesOpts.LogLikelihood = logL_PCK; 
 
         % Adaptively determine constant Bus.logC
-        % TODO: better algorithm
-        if ~isfield(Opts.Bus, 'logC')
-
-            % Default strategy
-            if ~isfield(BayesOpts.Bus, 'CStrategy')
-                BayesOpts.Bus.CStrategy = 'max';
-            end
-           
-            % Take specified strategy
-            switch BayesOpts.Bus.CStrategy
-                case 'max'
-                    BayesOpts.Bus.logC = -max(logL);
-                case 'latest'
-                    BayesOpts.Bus.logC = -logL(end);
-                case 'maxpck' 
-
-                    % get maximum of experimental design
-                    [maxl_logL, maxl_index] = max(logL_cleaned);
-                    maxl_x0 = X_cleaned(maxl_index, :);
-
-                    % determine c from experimental design
-                    c_zero_variance = -maxl_logL;
-
-                    % define inverse log-likelihood to find the minimum of
-                    f = @(x) -uq_evalModel(logL_PCK, x);
-                    
-                    % maximize surrogate log-likelihood
-                    [maxl_x, maxl_pck, found_flag] = fminsearch(f, maxl_x0);
-
-                    % Verify if converged and it's in the convex hull of
-                    % the points
-                    inside_hull = all(maxl_x > min(X_cleaned)) && all(maxl_x < max(X_cleaned));
-
-                    if ~inside_hull
-                        %sprintf('MaxPCK: potential unstable point, adjusting boundaries')
-                        maxl_x = max(maxl_x, min(X_cleaned));
-                        maxl_x = min(maxl_x, max(X_cleaned));
-
-                        maxl_pck = f(maxl_x);
-                    end
-
-                    % Take negative log-likelihood (overestimation)
-                    if found_flag
-                        BayesOpts.Bus.logC = maxl_pck;
-                    else
-                        sprintf('Found patological value of log(c) estimation, adjusting')
+            % TODO: better algorithm
+            if ~isfield(Opts.Bus, 'logC')
+    
+                % Default strategy
+                if ~isfield(BayesOpts.Bus, 'CStrategy')
+                    BayesOpts.Bus.CStrategy = 'max';
+                end
+               
+                % Take specified strategy
+                switch BayesOpts.Bus.CStrategy
+                    case 'max'
+                        BayesOpts.Bus.logC = -max(logL);
+                    case 'latest'
+                        BayesOpts.Bus.logC = -logL(end);
+                    case 'maxpck' 
+    
+                        % get maximum of experimental design
+                        [maxl_logL, maxl_index] = max(logL_cleaned);
+                        maxl_x0 = X_cleaned(maxl_index, :);
+    
+                        % determine c from experimental design
+                        c_zero_variance = -maxl_logL;
+    
+                        % define inverse log-likelihood to find the minimum of
+                        f = @(x) -uq_evalModel(logL_PCK, x);
+                        
+                        % maximize surrogate log-likelihood
+                        [maxl_x, maxl_pck, found_flag] = fminsearch(f, maxl_x0);
+    
+                        % Verify if converged and it's in the convex hull of
+                        % the points
+                        inside_hull = all(maxl_x > min(X_cleaned)) && all(maxl_x < max(X_cleaned));
+    
+                        if ~inside_hull
+                            %sprintf('MaxPCK: potential unstable point, adjusting boundaries')
+                            maxl_x = max(maxl_x, min(X_cleaned));
+                            maxl_x = min(maxl_x, max(X_cleaned));
+    
+                            maxl_pck = f(maxl_x);
+                        end
+    
+                        % Take negative log-likelihood (overestimation)
+                        if ~found_flag
+                            sprintf('Found patological value of log(c) estimation, correcting with boundary point.')
+                            %BayesOpts.Bus.logC = min(c_zero_variance, maxl_pck);
+                        end
+    
                         BayesOpts.Bus.logC = min(c_zero_variance, maxl_pck);
-                    end
-
-                case 'delaunay'
-
-                    if isfield(Opts.Bus, 'Delaunay') && ~isfield(Opts.Bus.Delaunay, 'maxk')
-                        Opts.Bus.Delaunay.maxk = 10;
-                    end
-
-                    % Rescale experimental design
-                    %stdX = (X - mean(X)) ./ std(X);
-                    %stdX = X ./ max(X);
-                    T = delaunayn(X_cleaned, {'QbB'});
     
-                    % compute midpoints and maximize variances
-                    W = reshape(X_cleaned(T,:), size(T,1), size(T,2), []);
-                    Wm = mean(W, 2);
-                    midpoints = permute(Wm, [1,3,2]);
-                    [mmeans, mvars] = uq_evalModel(logL_PCK , midpoints);
-                    
-                    % get only a certain number of max variance
-                    [~, varindex] = maxk(mvars, Opts.Bus.Delaunay.maxk);
-                    midpoints = midpoints(varindex,:);
-                    mmeans = mmeans(varindex);
-
-                    % sort by greatest mean
-                    [~, meanindex] = sort(mmeans, 'descend');
-                    midpoints = midpoints(meanindex,:);
+                    case 'delaunay'
     
-                    BayesOpts.Bus.logC = -uq_evalModel(logL_PCK , midpoints(1,:));
-
-                case 'maxhull'
-
-                    k = convhulln(X_cleaned, {'QbB'});
-                    W = X_cleaned(k,:);
-
-                    BayesOpts.Bus.logC = -max(uq_evalModel(logL_PCK , W));
-
-                case 'overmax'
-
-                    % proportion
-                    prop = 0.5*(1. - 2*atan(i - Opts.MaximumEvaluations/2)/pi);
+                        if isfield(Opts.Bus, 'Delaunay') && ~isfield(Opts.Bus.Delaunay, 'maxk')
+                            Opts.Bus.Delaunay.maxk = 10;
+                        end
     
-                    % a little bit higher than peaks
-                    BayesOpts.Bus.logC = -max(logL * (1. + 0.5 * prop));
+                        % Rescale experimental design
+                        %stdX = (X - mean(X)) ./ std(X);
+                        %stdX = X ./ max(X);
+                        T = delaunayn(X_cleaned, {'QbB'});
+        
+                        % compute midpoints and maximize variances
+                        W = reshape(X_cleaned(T,:), size(T,1), size(T,2), []);
+                        Wm = mean(W, 2);
+                        midpoints = permute(Wm, [1,3,2]);
+                        [mmeans, mvars] = uq_evalModel(logL_PCK , midpoints);
+                        
+                        % get only a certain number of max variance
+                        [~, varindex] = maxk(mvars, Opts.Bus.Delaunay.maxk);
+                        midpoints = midpoints(varindex,:);
+                        mmeans = mmeans(varindex);
+    
+                        % sort by greatest mean
+                        [~, meanindex] = sort(mmeans, 'descend');
+                        midpoints = midpoints(meanindex,:);
+        
+                        BayesOpts.Bus.logC = -uq_evalModel(logL_PCK , midpoints(1,:));
+    
+                    case 'maxhull'
+    
+                        k = convhulln(X_cleaned, {'QbB'});
+                        W = X_cleaned(k,:);
+    
+                        BayesOpts.Bus.logC = -max(uq_evalModel(logL_PCK , W));
+    
+                    case 'overmax'
+    
+                        % proportion
+                        prop = 0.5*(1. - 2*atan(i - Opts.MaximumEvaluations/2)/pi);
+        
+                        % a little bit higher than peaks
+                        BayesOpts.Bus.logC = -max(logL * (1. + 0.5 * prop));
+                end
             end
+
+        % Control the number of subsets, if too much
+        repeat_SuS = true;
+        max_SuS_repeat = 10;
+
+        while repeat_SuS && max_SuS_repeat > 0
+
+            repeat_SuS = false;
 
             sprintf("Taking constant logC: %g", BayesOpts.Bus.logC)
-        end
+
+            BusAnalysis = bus_analysis(BayesOpts);
+
+            % evaluate U-function on the limit state function
+            % Idea: maximize misclassification probability
+            px_samples = BusAnalysis.Results.Bus.PostSamples;
     
-        BusAnalysis = bus_analysis(BayesOpts);
+            % Filter out outliers
+            qXb = quantile(px_samples, 0.1);
+            qXt = quantile(px_samples, 0.9);
+    
+            px_samples = px_samples(all(px_samples > qXb & px_samples < qXt,2), :);
+            
+            % Take evaluations
+            [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, px_samples);
+    
+            if size(px_samples,1) < 10
+                % Pathological points case
+                fprintf("No point was found to be reliable. Repeating subset simulation with higher log(c)...\n")
+                repeat_SuS = true;
+            end
+ 
+            % Check for enough posterior samples
+            if sum(mean_post_LSF < 0) < 0.05 * size(mean_post_LSF,1)
+                fprintf("There aren't enough posterior samples. Repeating subset simulation with higher log(c)...\n")
+                fprintf("Proportion: %f\n", 1.0 * sum(mean_post_LSF < 0) / size(mean_post_LSF,1))
+                repeat_SuS = true;
+            end    
+            
+            if repeat_SuS
+                BayesOpts.Bus.logC = mean([BayesOpts.Bus.logC, -max(logL)]);
+            end
 
-        % evaluate U-function on the limit state function
-        % Idea: maximize misclassification probability
-        % TODO: use a UQLab module for efficiency, but now not necessary
-        px_samples = BusAnalysis.Results.Bus.PostSamples;
-        [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, px_samples);
+            max_SuS_repeat = max_SuS_repeat - 1;
+        end
 
+        % Take only posterior samples
+        qmean = 10.;
+        
+        px_samples = px_samples(mean_post_LSF < qmean,:);
+        mean_post_LSF = mean_post_LSF(mean_post_LSF < qmean);
+        var_post_LSF = var_post_LSF(mean_post_LSF < qmean);
+        
         x_medians = median(px_samples(:,2:end)); % TODO: distance from experimental design
-
+        
         ridge_cost = sum(abs(px_samples(:,2:end) ./ x_medians - 1),2);
         cost_LSF = abs(mean_post_LSF) ./ sqrt(var_post_LSF);
-
+        
         % Take first three candidates
         [~, opt_index] = mink(cost_LSF + Opts.Ridge * ridge_cost * median(cost_LSF), Opts.MinCostSamples);
-        xopt = BusAnalysis.Results.PostSamples(opt_index, :);
-
+        xopt = px_samples(opt_index, 2:end);
+        
         % Choose the one maximizing log-likelihood
         [~, opt_index] = max(uq_evalModel(logL_PCK, xopt));
         xopt = xopt(opt_index,:);
     
+        fprintf("Optimal X chosen to: ")
+        display(xopt)
+        fprintf("\n")
+        
         % Add to experimental design
         X = [X; xopt];
         logL = [logL; Opts.LogLikelihood(xopt) ];
@@ -346,7 +423,7 @@ function LALAnalysis = lal_analysis(Opts)
 
             % Histogram plots
             for k = 1:size(X,2)
-                set(hist_plots{k}.SuS, 'Data', BusAnalysis.Results.PostSamples(:,k))
+                set(hist_plots{k}.SuS, 'Data', px_samples(:,k+1))
                 set(hist_plots{k}.Opt, 'Value', xopt(k));
                 set(hist_plots{k}.SuSMedian, 'Value', x_medians(k));
             end
