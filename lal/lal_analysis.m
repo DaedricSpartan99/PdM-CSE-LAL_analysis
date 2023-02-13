@@ -26,10 +26,13 @@ function LALAnalysis = lal_analysis(Opts)
 
     %% Execution
 
+    % Handles
+    log_prior = @(x) uq_evalLogPDF(x, Opts.Prior);
+
     % Initialize output following initial guesses
     if isfield(Opts.ExpDesign, 'InitEval')
 
-        X = uq_getSample(Opts.Prior, Opts.ExpDesign.InitEval, 'LHS'); % 'LHS'
+        X = uq_getSample(Opts.Prior, Opts.ExpDesign.InitEval); % 'LHS'
 
         logL = Opts.LogLikelihood(X);
     else
@@ -170,11 +173,11 @@ function LALAnalysis = lal_analysis(Opts)
 
         logL_PCK = uq_createModel(PCKOpts, '-private');
 
-        sprintf("Iteration number: %d", i)
-        sprintf("PCK LOO error: %g", logL_PCK.Error.LOO)
+        fprintf("Iteration number: %d\n", i)
+        fprintf("PCK LOO error: %g\n", logL_PCK.Error.LOO)
 
         if isfield(Opts, 'Validation')
-            sprintf("PCK Validation error: %g", logL_PCK.Error.Val)
+            fprintf("PCK Validation error: %g\n", logL_PCK.Error.Val)
         end
         
         % TODO: Determine optimal c = 1 / max(L)
@@ -234,13 +237,14 @@ function LALAnalysis = lal_analysis(Opts)
                         for opt_ind = 1:size(x0,1)
 
                             % maximize surrogate log-likelihood
-                            [~, maxl_pck, found_flag] = fmincon(f, x0(opt_ind,:), [], [], [], [], xmin, xmax);
+                            options = optimoptions('fmincon', 'Display', 'off');
+                            [~, maxl_pck, found_flag] = fmincon(f, x0(opt_ind,:), [], [], [], [], xmin, xmax, [], options);
         
                             % Take negative log-likelihood (overestimation)
-                            if found_flag == 1
+                            if found_flag >= 0
                                 opt_pck(opt_ind) = -maxl_pck;
                             else
-                                sprintf('Found patological value of log(c) estimation, correcting with boundary point.')
+                                fprintf('Found patological value of log(c) estimation, correcting with experimental design maximum.\n')
                                 opt_pck(opt_ind) = -c_zero_variance;
                             end
                         end
@@ -274,33 +278,18 @@ function LALAnalysis = lal_analysis(Opts)
                         midpoints = midpoints(meanindex,:);
         
                         BayesOpts.Bus.logC = -uq_evalModel(logL_PCK , midpoints(1,:));
-    
-                    case 'maxhull'
-    
-                        k = convhulln(X_cleaned, {'QbB'});
-                        W = X_cleaned(k,:);
-    
-                        BayesOpts.Bus.logC = -max(uq_evalModel(logL_PCK , W));
-    
-                    case 'overmax'
-    
-                        % proportion
-                        prop = 0.5*(1. - 2*atan(i - Opts.MaximumEvaluations/2)/pi);
-        
-                        % a little bit higher than peaks
-                        BayesOpts.Bus.logC = -max(logL * (1. + 0.5 * prop));
                 end
             end
 
         % Control the number of subsets, if too much
         repeat_SuS = true;
-        max_SuS_repeat = 10;
+        max_SuS_repeat = 50;
 
         while repeat_SuS && max_SuS_repeat > 0
 
             repeat_SuS = false;
 
-            sprintf("Taking constant logC: %g", BayesOpts.Bus.logC)
+            fprintf("Taking constant logC: %g\n", BayesOpts.Bus.logC)
 
             BusAnalysis = bus_analysis(BayesOpts);
 
@@ -309,8 +298,8 @@ function LALAnalysis = lal_analysis(Opts)
             px_samples = BusAnalysis.Results.Bus.PostSamples;
     
             % Filter out outliers
-            qXb = quantile(px_samples, 0.1);
-            qXt = quantile(px_samples, 0.9);
+            qXb = quantile(px_samples, 0.05);
+            qXt = quantile(px_samples, 0.95);
     
             px_samples = px_samples(all(px_samples > qXb & px_samples < qXt,2), :);
             
@@ -324,25 +313,40 @@ function LALAnalysis = lal_analysis(Opts)
             end
  
             % Check for enough posterior samples
-            if sum(mean_post_LSF < 0) < 0.05 * size(mean_post_LSF,1)
+            sus_ratio = 1.0 * sum(mean_post_LSF < 0) / size(mean_post_LSF,1);
+            if sus_ratio < 0.1
                 fprintf("There aren't enough posterior samples. Repeating subset simulation with higher log(c)...\n")
-                fprintf("Proportion: %f\n", 1.0 * sum(mean_post_LSF < 0) / size(mean_post_LSF,1))
+                fprintf("Proportion: %f\n", sus_ratio)
                 repeat_SuS = true;
             end    
             
             if repeat_SuS
-                BayesOpts.Bus.logC = mean([BayesOpts.Bus.logC, -max(logL)]);
+
+                h = BusAnalysis.Results.Subset.History.q;
+
+                if length(h) < 2 || sum(mean_post_LSF < 0) == 0
+                    BayesOpts.Bus.logC = mean([BayesOpts.Bus.logC, -max(logL)]);
+                else
+                    % Take last subset threshold
+                    BayesOpts.Bus.logC = BayesOpts.Bus.logC + quantile(mean_post_LSF,0.1);
+                end
             end
 
             max_SuS_repeat = max_SuS_repeat - 1;
         end
 
         % Take only posterior samples
-        %qmean = 10.;
-        
-        %px_samples = px_samples(mean_post_LSF < qmean,:);
-        %mean_post_LSF = mean_post_LSF(mean_post_LSF < qmean);
-        %var_post_LSF = var_post_LSF(mean_post_LSF < qmean);
+        %qmean = quantile(mean_post_LSF, min(1., sus_ratio+0.05));
+        post_logL = uq_evalModel(logL_PCK, px_samples(:,2:end));
+        ql = quantile(post_logL, 0.1);
+
+        if (sum(post_logL > ql) > 0)
+            px_samples = px_samples(post_logL > ql,:);
+            mean_post_LSF = mean_post_LSF(post_logL > ql);
+            var_post_LSF = var_post_LSF(post_logL > ql);
+        else
+            fprintf("Not enough samples to cut off highest likelihood. Nb: %d\n", size(px_samples,1))
+        end
         
         x_medians = median(px_samples(:,2:end)); % TODO: distance from experimental design
         
@@ -364,6 +368,7 @@ function LALAnalysis = lal_analysis(Opts)
         % Add to experimental design
         X = [X; xopt];
         logL = [logL; Opts.LogLikelihood(xopt) ];
+        post = [post; logL(end) + log_prior(xopt)];
 
         % Store result as history
         LALAnalysis.OptPoints(i).X = xopt;
@@ -380,9 +385,6 @@ function LALAnalysis = lal_analysis(Opts)
             LALAnalysis.logC(i) = BayesOpts.Bus.logC;
         end
 
-        %if abs(logL(end) - min(logL)) < eps
-        %    sprintf("Found unconvenient point, logL = %g", logL(end))
-        %end
 
         % Update plot
         if Opts.PlotLogLikelihood
@@ -414,5 +416,6 @@ function LALAnalysis = lal_analysis(Opts)
     % Store results
     LALAnalysis.ExpDesign.X = X;
     LALAnalysis.ExpDesign.LogLikelihood = logL;
+    LALAnalysis.ExpDesign.UnNormPosterior = post;
     LALAnalysis.Opts = Opts;
 end
