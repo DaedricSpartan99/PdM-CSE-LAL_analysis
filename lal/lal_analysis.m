@@ -44,6 +44,8 @@ function LALAnalysis = lal_analysis(Opts)
         Opts.PlotLogLikelihood = false;
     end
 
+    post = logL + log_prior(X);
+
     %Opts.Validation.PostLogLikelihood = max(Opts.Validation.PostLogLikelihood, -1200);
     %Opts.Validation.PriorLogLikelihood = max(Opts.Validation.PriorLogLikelihood, -1200);
 
@@ -147,6 +149,7 @@ function LALAnalysis = lal_analysis(Opts)
         PCKOpts.Type = 'Metamodel';
         PCKOpts.MetaType = 'PCK';
         PCKOpts.Mode = 'optimal';  
+        %PCKOpts.Mode = 'sequential'; 
         %PCKOpts.FullModel = Opts.LogLikelihood;
         PCKOpts.Input = Opts.Prior; 
         PCKOpts.isVectorized = true;

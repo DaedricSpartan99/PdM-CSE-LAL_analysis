@@ -4,6 +4,8 @@ clearvars
 rng(100,'twister')
 uqlab
 
+addpath('../tools')
+
 %% Input definition
 
 % Prior definition
@@ -15,7 +17,7 @@ PriorInput = uq_createInput(PriorOpts);
 %% Likelihood definition
 
 % peaks position
-y = [1.5, -1., -0.5];
+y = [1.5, -1., -1.5];
 
 % peaks extension
 std_disc = [0.1, 0.05, 0.02];
@@ -59,7 +61,7 @@ legend
 
 %% Create experimental design
 
-init_eval = 30;
+init_eval = 10;
 
 LALOpts.ExpDesign.X = uq_getSample(PriorInput, init_eval);
 LALOpts.ExpDesign.LogLikelihood = log_likelihood(LALOpts.ExpDesign.X);
@@ -91,7 +93,7 @@ drawnow
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 10;
+LALOpts.MaximumEvaluations = 1;
 LALOpts.Bus.CStrategy = 'max';
 
 %LALOpts.PCK.PCE.Degree = 0:2:12;
@@ -119,7 +121,7 @@ LALOpts.ExpDesign = first_exp;
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e5;
-LALOpts.MaximumEvaluations = 30;
+LALOpts.MaximumEvaluations = 20;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Bus.Delaunay.maxk = 10;
 
@@ -142,7 +144,7 @@ LALOpts.ExpDesign = second_exp;
 LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 LALOpts.Bus.BatchSize = 5e4;                             % Number of samples for Subset simulation
 LALOpts.Bus.MaxSampleSize = 1e6;
-LALOpts.MaximumEvaluations = 15;
+LALOpts.MaximumEvaluations = 1;
 LALOpts.Bus.CStrategy = 'maxpck';
 
 LALOpts.PCK.PCE.Method = 'LARS';
