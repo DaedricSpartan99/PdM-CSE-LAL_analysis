@@ -285,7 +285,7 @@ function LALAnalysis = lal_analysis(Opts)
             end
 
         % Control the number of subsets, if too much
-        repeat_SuS = true;
+        repeat_SuS = false; % TODO: check with clustering
         max_SuS_repeat = 50;
 
         while repeat_SuS && max_SuS_repeat > 0
@@ -340,43 +340,68 @@ function LALAnalysis = lal_analysis(Opts)
 
         % Take only posterior samples
         %qmean = quantile(mean_post_LSF, min(1., sus_ratio+0.05));
-        post_logL = uq_evalModel(logL_PCK, px_samples(:,2:end));
-        ql = quantile(post_logL, 0.1);
+        %post_logL = uq_evalModel(logL_PCK, px_samples(:,2:end));
+        %ql = quantile(post_logL, 0.1);
 
-        if (sum(post_logL > ql) > 0)
-            px_samples = px_samples(post_logL > ql,:);
-            mean_post_LSF = mean_post_LSF(post_logL > ql);
-            var_post_LSF = var_post_LSF(post_logL > ql);
-        else
-            fprintf("Not enough samples to cut off highest likelihood. Nb: %d\n", size(px_samples,1))
-        end
-        
-        x_medians = median(px_samples(:,2:end)); % TODO: distance from experimental design
-        
-        ridge_cost = sum(abs(px_samples(:,2:end) ./ x_medians - 1),2);
+        %if (sum(post_logL > ql) > 0)
+        %    px_samples = px_samples(post_logL > ql,:);
+        %    mean_post_LSF = mean_post_LSF(post_logL > ql);
+        %    var_post_LSF = var_post_LSF(post_logL > ql);
+        %else
+        %    fprintf("Not enough samples to cut off highest likelihood. Nb: %d\n", size(px_samples,1))
+        %end
+
+        BusAnalysis = bus_analysis(BayesOpts);
+
+        % evaluate U-function on the limit state function
+        % Idea: maximize misclassification probability
+        px_samples = BusAnalysis.Results.Bus.PostSamples;
+      
+        % Take lsf evaluations
+        [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, px_samples);
+    
+        % Compute U-function and misclassification probability
         cost_LSF = abs(mean_post_LSF) ./ sqrt(var_post_LSF);
+        W = normcdf(-cost_LSF);
+
+        % Cluster (TODO: adapt estimating the number of peaks)
+        Opts.ClusterRange = 2:6;
+        Opts.ClusterMaxIter = 50;
+        [~, xopt] = w_means(px_samples(:,2:end), W, Opts.ClusterRange, Opts.ClusterMaxIter);
         
         % Take first three candidates
-        [~, opt_index] = mink(cost_LSF + Opts.Ridge * ridge_cost * median(cost_LSF), Opts.MinCostSamples);
-        xopt = px_samples(opt_index, 2:end);
+        %[~, opt_index] = mink(cost_LSF, Opts.MinCostSamples);
+        %xopt = px_samples(opt_index, 2:end);
         
         % Choose the one maximizing log-likelihood
-        [~, opt_index] = max(uq_evalModel(logL_PCK, xopt));
-        xopt = xopt(opt_index,:);
+        %[~, opt_index] = max(uq_evalModel(logL_PCK, xopt));
+        %xopt = xopt(opt_index,:);
     
         fprintf("Optimal X chosen to: ")
         display(xopt)
         fprintf("\n")
+
+        logL_pck_opt = uq_evalModel(logL_PCK, xopt);
+
+        fprintf("Optimal points surrogate log-likelihood: ")
+        display(logL_pck_opt)
+        fprintf("\n")
+
+        logL_opt = Opts.LogLikelihood(xopt);
+
+        fprintf("Optimal points real log-likelihood: ")
+        display(logL_opt)
+        fprintf("\n")
         
         % Add to experimental design
         X = [X; xopt];
-        logL = [logL; Opts.LogLikelihood(xopt) ];
-        post = [post; logL(end) + log_prior(xopt)];
+        logL = [logL; logL_opt ];
+        post = [post; logL_opt + log_prior(xopt)];
 
         % Store result as history
         LALAnalysis.OptPoints(i).X = xopt;
         LALAnalysis.OptPoints(i).logL = logL(end);
-        LALAnalysis.OptPoints(i).lsf = cost_LSF(opt_index);
+        %LALAnalysis.OptPoints(i).lsf = uq_evalModel(BusAnalysis.Results.Bus.LSF, centroids);
         LALAnalysis.PCK(i) = logL_PCK;
 
         if isfield(Opts, 'StoreBusResults') && Opts.StoreBusResults

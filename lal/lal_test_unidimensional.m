@@ -121,7 +121,7 @@ LALOpts.ExpDesign = first_exp;
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e5;
-LALOpts.MaximumEvaluations = 20;
+LALOpts.MaximumEvaluations = 5;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Bus.Delaunay.maxk = 10;
 
