@@ -114,9 +114,9 @@ function LALAnalysis = lal_analysis(Opts)
             hist_plots{k}.Post = histogram(Opts.Validation.PostSamples(:,k),50); 
             hist_plots{k}.SuS = histogram(Opts.Validation.PostSamples(:,k),50); 
             hist_plots{k}.Opt = xline(mean(Opts.Validation.PostSamples(:,k)), 'LineWidth', 5);
-            hist_plots{k}.SuSMedian = xline(mean(Opts.Validation.PostSamples(:,k)),  '--b', 'LineWidth', 5);
+            %hist_plots{k}.SuSMedian = xline(mean(Opts.Validation.PostSamples(:,k)),  '--b', 'LineWidth', 5);
             hold off
-            legend('Prior', 'Posterior', 'SuS-Samples', 'Min cost point', 'SuS Median')
+            legend('Prior', 'Posterior', 'SuS-Samples', 'Min cost point')
             title(sprintf('Component %d',k))
         end
         
@@ -127,12 +127,16 @@ function LALAnalysis = lal_analysis(Opts)
         LALAnalysis.lsfEvaluations = cell(Opts.MaximumEvaluations,1);
     end
 
-    if ~isfield(Opts, 'Ridge')
-        Opts.Ridge = 0.;
+    if ~isfield(Opts, 'SelectMax')
+        Opts.SelectMax = 1;
     end
 
-    if ~isfield(Opts, 'MinCostSamples')
-        Opts.MinCostSamples = 3;
+    if ~isfield(Opts, 'ClusterRange')
+        Opts.ClusterRange = 2:6;
+    end
+
+    if ~isfield(Opts, 'ClusterMaxIter')
+        Opts.ClusterMaxIter = 50;
     end
 
     %post_input = Opts.Prior;
@@ -148,8 +152,7 @@ function LALAnalysis = lal_analysis(Opts)
         % Create definitive PCK
         PCKOpts.Type = 'Metamodel';
         PCKOpts.MetaType = 'PCK';
-        PCKOpts.Mode = 'optimal';  
-        %PCKOpts.Mode = 'sequential'; 
+        PCKOpts.Mode = 'optimal';   
         %PCKOpts.FullModel = Opts.LogLikelihood;
         PCKOpts.Input = Opts.Prior; 
         PCKOpts.isVectorized = true;
@@ -284,6 +287,8 @@ function LALAnalysis = lal_analysis(Opts)
                 end
             end
 
+        %% DEPRECATED
+
         % Control the number of subsets, if too much
         repeat_SuS = false; % TODO: check with clustering
         max_SuS_repeat = 50;
@@ -338,24 +343,34 @@ function LALAnalysis = lal_analysis(Opts)
             max_SuS_repeat = max_SuS_repeat - 1;
         end
 
-        % Take only posterior samples
-        %qmean = quantile(mean_post_LSF, min(1., sus_ratio+0.05));
-        %post_logL = uq_evalModel(logL_PCK, px_samples(:,2:end));
-        %ql = quantile(post_logL, 0.1);
+        %%
 
-        %if (sum(post_logL > ql) > 0)
-        %    px_samples = px_samples(post_logL > ql,:);
-        %    mean_post_LSF = mean_post_LSF(post_logL > ql);
-        %    var_post_LSF = var_post_LSF(post_logL > ql);
-        %else
-        %    fprintf("Not enough samples to cut off highest likelihood. Nb: %d\n", size(px_samples,1))
-        %end
+        fprintf("Taking constant logC: %g\n", BayesOpts.Bus.logC)
 
         BusAnalysis = bus_analysis(BayesOpts);
 
         % evaluate U-function on the limit state function
         % Idea: maximize misclassification probability
         px_samples = BusAnalysis.Results.Bus.PostSamples;
+
+        % squeez SuS samples
+        %x_samples = px_samples(:,2:end);
+        %x_samples = x_samples ./ max(x_samples);
+
+        %minpts = 50;
+        %kD = pdist2(x_samples,x_samples,'euc','Smallest',minpts);
+        %kD = sort(kD(end,:));
+        %%[~,eps_dbscan_ind] = knee_pt(kD, 1:length(kD));
+        %eps_dbscan = kD(eps_dbscan_ind);
+
+        %dbscan_labels = dbscan(x_samples, eps_dbscan,minpts);
+
+        %px_samples = px_samples(dbscan_labels ~= -1, :);
+
+        % Filter out outliers
+        qXb = quantile(px_samples(:,2:end), 0.025);
+        qXt = quantile(px_samples(:,2:end), 0.975);
+        px_samples = px_samples(all(px_samples(:,2:end) > qXb & px_samples(:,2:end) < qXt,2), :);            
       
         % Take lsf evaluations
         [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, px_samples);
@@ -364,31 +379,40 @@ function LALAnalysis = lal_analysis(Opts)
         cost_LSF = abs(mean_post_LSF) ./ sqrt(var_post_LSF);
         W = normcdf(-cost_LSF);
 
-        % Cluster (TODO: adapt estimating the number of peaks)
-        Opts.ClusterRange = 2:6;
-        Opts.ClusterMaxIter = 50;
-        [~, xopt] = w_means(px_samples(:,2:end), W, Opts.ClusterRange, Opts.ClusterMaxIter);
-        
-        % Take first three candidates
-        %[~, opt_index] = mink(cost_LSF, Opts.MinCostSamples);
-        %xopt = px_samples(opt_index, 2:end);
-        
-        % Choose the one maximizing log-likelihood
-        %[~, opt_index] = max(uq_evalModel(logL_PCK, xopt));
-        %xopt = xopt(opt_index,:);
+        % Cluster (TODO: adapt estimating the number of peaks);
+        if length(Opts.ClusterRange) == 1
+            [cost_labels, xopt] = kw_means(px_samples(:,2:end), W, max(Opts.ClusterRange), Opts.ClusterMaxIter); 
+        else
+            [cost_labels, xopt] = w_means(px_samples(:,2:end), W, Opts.ClusterRange, Opts.ClusterMaxIter);
+        end
+
+        % Sort by weights
+        c_weights = zeros(size(xopt,1),1);
+        for j = 1:length(c_weights)
+            c_weights(j) = sum(W(cost_labels == j));
+        end
+
+        [c_weights, opt_ind] = maxk(c_weights, min(Opts.SelectMax, length(c_weights)));
+        xopt = xopt(opt_ind,:);       
     
         fprintf("Optimal X chosen to: ")
         display(xopt)
         fprintf("\n")
 
+        fprintf("With cluster cost: ")
+        display(c_weights)
+        fprintf("\n")
+
+        % Compute surrogate real log-likelihood
         logL_pck_opt = uq_evalModel(logL_PCK, xopt);
 
         fprintf("Optimal points surrogate log-likelihood: ")
         display(logL_pck_opt)
         fprintf("\n")
 
+        % Compute real log-likelihood
         logL_opt = Opts.LogLikelihood(xopt);
-
+        
         fprintf("Optimal points real log-likelihood: ")
         display(logL_opt)
         fprintf("\n")
@@ -433,8 +457,8 @@ function LALAnalysis = lal_analysis(Opts)
             % Histogram plots
             for k = 1:size(X,2)
                 set(hist_plots{k}.SuS, 'Data', px_samples(:,k+1))
-                set(hist_plots{k}.Opt, 'Value', xopt(k));
-                set(hist_plots{k}.SuSMedian, 'Value', x_medians(k));
+                set(hist_plots{k}.Opt, 'Value', xopt(1,k));
+                %set(hist_plots{k}.SuSMedian, 'Value', x_medians(k));
             end
 
             drawnow

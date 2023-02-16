@@ -11,10 +11,10 @@ function [labels, centroids] = w_means(X, W, k_range, varargin)
         k = k_range(k_ind);
         [labels, centroids] = kw_means(X, W, k, varargin{:});
 
-        centroids = centroids(isfinite(centroids));
-
         % take label counts
-        [~,counts] = count_unique(labels);
+        [uniques, counts] = count_unique(labels);
+
+        centroids = centroids(uniques);
 
         % compute square euclidean distances from overall mean
         F_sqdist = sum((centroids - overall_mean).^2, 2);
@@ -36,7 +36,7 @@ function [labels, centroids] = w_means(X, W, k_range, varargin)
     end
 
     %% Find F_score curve elbow and apply actual weighted mean clustering
-    [~, opt_k_ind] = knee_pt(clusters, F_score);
+    [~, opt_k_ind] = knee_pt(F_score, clusters);
     opt_k = clusters(opt_k_ind);
 
     [labels, centroids] = kw_means(X, W, opt_k, varargin{:});

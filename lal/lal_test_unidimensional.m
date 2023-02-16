@@ -17,7 +17,7 @@ PriorInput = uq_createInput(PriorOpts);
 %% Likelihood definition
 
 % peaks position
-y = [1.5, -1., -1.5];
+y = [1.5, -1., -2.5];
 
 % peaks extension
 std_disc = [0.1, 0.05, 0.02];
@@ -121,7 +121,7 @@ LALOpts.ExpDesign = first_exp;
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e5;
-LALOpts.MaximumEvaluations = 5;
+LALOpts.MaximumEvaluations = 1;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Bus.Delaunay.maxk = 10;
 
@@ -142,9 +142,9 @@ second_exp = LALAnalysis.ExpDesign;
 LALOpts.ExpDesign = second_exp;
  
 LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
-LALOpts.Bus.BatchSize = 5e4;                             % Number of samples for Subset simulation
-LALOpts.Bus.MaxSampleSize = 1e6;
-LALOpts.MaximumEvaluations = 1;
+%LALOpts.Bus.BatchSize = 5e4;                             % Number of samples for Subset simulation
+%LALOpts.Bus.MaxSampleSize = 1e6;
+LALOpts.MaximumEvaluations = 10;
 LALOpts.Bus.CStrategy = 'maxpck';
 
 LALOpts.PCK.PCE.Method = 'LARS';
