@@ -86,9 +86,9 @@ function LALAnalysis = lal_analysis(Opts)
         xlabel('Log-likelihood')
 
         ax4 = nexttile;
-        W = pca(X);
-        T = X * W(:,1:2);
-        Tpost = Opts.Validation.PostSamples * W(:,1:2);
+        W_pca = pca(X);
+        T = X * W_pca(:,1:2);
+        Tpost = Opts.Validation.PostSamples * W_pca(:,1:2);
         hold on
         pca_scatter = scatter(ax4, T(:,1), T(:,2), 20, logL, 'Filled')
         pca_colorbar = colorbar(ax4)
@@ -271,8 +271,8 @@ function LALAnalysis = lal_analysis(Opts)
                         T = delaunayn(X_cleaned, {'QbB'});
         
                         % compute midpoints and maximize variances
-                        W = reshape(X_cleaned(T,:), size(T,1), size(T,2), []);
-                        Wm = mean(W, 2);
+                        W_del = reshape(X_cleaned(T,:), size(T,1), size(T,2), []);
+                        Wm = mean(W_del, 2);
                         midpoints = permute(Wm, [1,3,2]);
                         [mmeans, mvars] = uq_evalModel(logL_PCK , midpoints);
                         
@@ -378,21 +378,37 @@ function LALAnalysis = lal_analysis(Opts)
         % Take lsf evaluations
         [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, px_samples);
     
+        % Compute surrogate log-likelihood
+        %logL_pck_samples = uq_evalModel(logL_PCK, px_samples(:,2:end));
+
         % Compute U-function and misclassification probability
         cost_LSF = abs(mean_post_LSF) ./ sqrt(var_post_LSF);
         W = normcdf(-cost_LSF);
+        
+        % Normalize data before clustering
+        x_mean = mean(px_samples(:,2:end));
+        x_std = std(px_samples(:,2:end));
+        x_norm = (px_samples(:,2:end) - x_mean) ./ x_std;
 
         % Cluster (TODO: adapt estimating the number of peaks);
         if length(Opts.ClusterRange) == 1
-            [cost_labels, xopt] = kw_means(px_samples(:,2:end), W, max(Opts.ClusterRange), Opts.ClusterMaxIter); 
+            [cost_labels, xopt] = kw_means(x_norm, W, max(Opts.ClusterRange), Opts.ClusterMaxIter); 
         else
-            [cost_labels, xopt] = w_means(px_samples(:,2:end), W, Opts.ClusterRange, Opts.ClusterMaxIter);
+            [cost_labels, xopt] = w_means(x_norm, W, Opts.ClusterRange, Opts.ClusterMaxIter);
         end
 
-        % Sort by weights
+        % Un-normalize xopt and sort by weights
         c_weights = zeros(size(xopt,1),1);
         for j = 1:length(c_weights)
-            c_weights(j) = sum(W(cost_labels == j));
+            p_j = px_samples(cost_labels == j,1);
+            w_j = W(cost_labels == j);
+
+            %xopt(j,:) = colwise_weightedMedian(px_samples(cost_labels == j,2:end),w_j);
+            xopt(j,:) = sum(px_samples(cost_labels == j,2:end) .* w_j) / sum(w_j);
+
+            % Take greatest likelihood points
+            c_weights(j) = mean(p_j .* w_j);
+            %c_weights(j) = weightedMedian(w_j, p_j);
         end
 
         [c_weights, opt_ind] = maxk(c_weights, min(Opts.SelectMax, length(c_weights)));
@@ -406,7 +422,7 @@ function LALAnalysis = lal_analysis(Opts)
         display(c_weights)
         fprintf("\n")
 
-        % Compute surrogate real log-likelihood
+        % Compute surrogate log-likelihood
         logL_pck_opt = uq_evalModel(logL_PCK, xopt);
 
         fprintf("Optimal points surrogate log-likelihood: ")
@@ -449,9 +465,9 @@ function LALAnalysis = lal_analysis(Opts)
             histogram(ax3, logL_cleaned, 12);
             %set(logLhist, 'Data', logL_cleaned, 'BinLimits', [min(logL_cleaned), max(logL_cleaned)]);
 
-            W = pca(X_cleaned);
-            T = X_cleaned * W(:,1:2);
-            Tpost = Opts.Validation.PostSamples * W(:,1:2);
+            W_pca = pca(X_cleaned);
+            T = X_cleaned * W_pca(:,1:2);
+            Tpost = Opts.Validation.PostSamples * W_pca(:,1:2);
             set(pca_scatter, 'XData',T(:,1), 'YData', T(:,2), "CData", logL_cleaned)
             set(pca_post_scatter, 'XData', Tpost(:,1), 'YData', Tpost(:,2))
             set(pca_colorbar, 'Limits', [min(logL_cleaned), max(logL_cleaned)])

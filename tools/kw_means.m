@@ -20,7 +20,7 @@ function [labels, centroids] = kw_means(X, W, k, varargin)
     while any(labels ~= old_labels) && iter <= n_iter  
 
     %% Assign values to centroids
-        kD = pdist2(X, centroids);
+        kD = pdist2(X, centroids);%, 'cityblock');
         old_labels = labels;
         [~, labels] = min(kD,[],2);
     
@@ -28,6 +28,12 @@ function [labels, centroids] = kw_means(X, W, k, varargin)
         for i = 1:k
             x_i = X(labels == i,:);
             w_i = W(labels == i);
+            %if isempty(w_i) 
+            %    centroids(i,:) = NaN;
+            %else
+            %    centroids(i,:) = colwise_weightedMedian(x_i, w_i); %sum(w_i .* x_i) / sum(w_i);
+            %end
+
             centroids(i,:) = sum(w_i .* x_i) / sum(w_i);
         end
     end
