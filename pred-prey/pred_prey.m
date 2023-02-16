@@ -3,6 +3,7 @@ rng(100,'twister')
 uqlab
 
 addpath('../lal')
+addpath('../tools')
 
 %% Data set
 load('uq_Example_BayesianPreyPred.mat')
@@ -132,7 +133,7 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 60;
+init_eval = 40;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
 LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval, 'Sobol');
@@ -141,7 +142,7 @@ LALOpts.ExpDesign.LogLikelihood = log_likelihood(LALOpts.ExpDesign.X);
 init_X = LALOpts.ExpDesign.X;
 init_logL = LALOpts.ExpDesign.LogLikelihood;
 
-qinit = quantile(init_logL, 0.3);
+qinit = quantile(init_logL, 0.05);
 init_X = init_X(init_logL > qinit,:);
 init_logL = init_logL(init_logL > qinit);
 
@@ -183,7 +184,7 @@ PCKOpts.isVectorized = true;
 PCKOpts.ExpDesign.X = init_X;
 PCKOpts.ExpDesign.Y = init_logL;
 
-PCKOpts.PCE.Degree = 1:12;
+PCKOpts.PCE.Degree = 1:8;
 
 %PCKOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 
@@ -235,14 +236,17 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 30;
+LALOpts.MaximumEvaluations = 20;
 LALOpts.ExpDesign.X = init_X;
 LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
 LALOpts.Bus.CStrategy = 'maxpck';
-LALOpts.MinCostSamples = 5;  
+%LALOpts.Bus.Delaunay.maxk = 50;
+ 
+LALOpts.SelectMax = 3;
+LALOpts.ClusterRange = 2:8;
 
-LALOpts.PCE.Degree = 1:5;
+LALOpts.PCK.PCE.Degree = 1:8;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
@@ -253,7 +257,7 @@ LALOpts.PCE.Degree = 1:5;
 %LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
 
-%LALOpts.cleanQuantile = 0.05;
+LALOpts.cleanQuantile = 0.025;
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
@@ -330,13 +334,16 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 50;
+LALOpts.MaximumEvaluations = 10;
 LALOpts.ExpDesign = FirstLALAnalysis.ExpDesign;
 LALOpts.PlotLogLikelihood = true;
-LALOpts.Bus.CStrategy = 'maxpck';
-LALOpts.MinCostSamples = 1;  
+LALOpts.Bus.CStrategy = 'delaunay';
+LALOpts.Bus.Delaunay.maxk = 60;
 
-LALOpts.PCE.Degree = 1:5;
+LALOpts.SelectMax = 1;
+LALOpts.ClusterRange = 2:15;
+
+LALOpts.PCK.PCE.Degree = 1:8;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
@@ -347,7 +354,7 @@ LALOpts.PCE.Degree = 1:5;
 %LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
 
-%LALOpts.cleanQuantile = 0.05;
+LALOpts.cleanQuantile = 0.025;
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;

@@ -221,16 +221,16 @@ function LALAnalysis = lal_analysis(Opts)
                         maxl_x0 = X_cleaned(maxl_index, :);
 
                         % sample from prior distribution for other points
-                        x_prior = uq_getSample(Opts.Prior, 1000);
+                        x_prior = uq_getSample(Opts.Prior, 5000);
 
-                        qxb = quantile(x_prior, 0.05);
-                        qxu = quantile(x_prior, 0.95);
+                        qxb = quantile(x_prior, 0.025);
+                        qxu = quantile(x_prior, 0.975);
                         x_prior = x_prior(all(x_prior > qxb & x_prior < qxu, 2), :);
 
                         % Optimize from each point
                         x0 = [maxl_x0; x_prior(1:10,:)];
-                        xmin = qxb;
-                        xmax = qxu;
+                        xmin = min(x_prior);
+                        xmax = max(x_prior);
     
                         % determine c from experimental design
                         c_zero_variance = -maxl_logL;
@@ -253,9 +253,11 @@ function LALAnalysis = lal_analysis(Opts)
                                 fprintf('Found patological value of log(c) estimation, correcting with experimental design maximum.\n')
                                 opt_pck(opt_ind) = -c_zero_variance;
                             end
+                            fprintf("Peak index %d, fmincon flag: %d, log-likelihood: %f \n", opt_ind, found_flag, -maxl_pck)
                         end
     
                         BayesOpts.Bus.logC = min(c_zero_variance, -max(opt_pck));
+                        %BayesOpts.Bus.logC = -max(opt_pck);
     
                     case 'delaunay'
     
@@ -290,7 +292,7 @@ function LALAnalysis = lal_analysis(Opts)
         %% DEPRECATED
 
         % Control the number of subsets, if too much
-        repeat_SuS = false; % TODO: check with clustering
+        repeat_SuS = true; % TODO: check with clustering
         max_SuS_repeat = 50;
 
         while repeat_SuS && max_SuS_repeat > 0
@@ -306,13 +308,13 @@ function LALAnalysis = lal_analysis(Opts)
             px_samples = BusAnalysis.Results.Bus.PostSamples;
     
             % Filter out outliers
-            qXb = quantile(px_samples, 0.05);
-            qXt = quantile(px_samples, 0.95);
+            %qXb = quantile(px_samples, 0.025);
+            %qXt = quantile(px_samples, 0.975);
     
-            px_samples = px_samples(all(px_samples > qXb & px_samples < qXt,2), :);
+            %px_samples = px_samples(all(px_samples > qXb & px_samples < qXt,2), :);
             
             % Take evaluations
-            [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, px_samples);
+            [mean_post_LSF, ~] = uq_evalModel(BusAnalysis.Results.Bus.LSF, px_samples);
     
             if size(px_samples,1) < 10
                 % Pathological points case
@@ -330,28 +332,29 @@ function LALAnalysis = lal_analysis(Opts)
             
             if repeat_SuS
 
-                h = BusAnalysis.Results.Subset.History.q;
+                %h = BusAnalysis.Results.Subset.History.q;
 
-                if length(h) < 2 || sum(mean_post_LSF < 0) == 0
+                %if length(h) < 2 || sum(mean_post_LSF < 0) == 0
                     BayesOpts.Bus.logC = mean([BayesOpts.Bus.logC, -max(logL)]);
-                else
+                %else
                     % Take last subset threshold
-                    BayesOpts.Bus.logC = BayesOpts.Bus.logC + quantile(mean_post_LSF,0.1);
-                end
+                    %BayesOpts.Bus.logC = BayesOpts.Bus.logC + quantile(mean_post_LSF,0.1);
+                %end
             end
+
+            fprintf("Taking constant logC: %g\n", BayesOpts.Bus.logC)
 
             max_SuS_repeat = max_SuS_repeat - 1;
         end
 
         %%
 
-        fprintf("Taking constant logC: %g\n", BayesOpts.Bus.logC)
-
-        BusAnalysis = bus_analysis(BayesOpts);
+        %fprintf("Taking constant logC: %g\n", BayesOpts.Bus.logC)
+        %BusAnalysis = bus_analysis(BayesOpts);
 
         % evaluate U-function on the limit state function
         % Idea: maximize misclassification probability
-        px_samples = BusAnalysis.Results.Bus.PostSamples;
+        %px_samples = BusAnalysis.Results.Bus.PostSamples;
 
         % squeez SuS samples
         %x_samples = px_samples(:,2:end);
@@ -368,9 +371,9 @@ function LALAnalysis = lal_analysis(Opts)
         %px_samples = px_samples(dbscan_labels ~= -1, :);
 
         % Filter out outliers
-        qXb = quantile(px_samples(:,2:end), 0.025);
-        qXt = quantile(px_samples(:,2:end), 0.975);
-        px_samples = px_samples(all(px_samples(:,2:end) > qXb & px_samples(:,2:end) < qXt,2), :);            
+        %qXb = quantile(px_samples(:,2:end), 0.025);
+        %qXt = quantile(px_samples(:,2:end), 0.975);
+        %px_samples = px_samples(all(px_samples(:,2:end) > qXb & px_samples(:,2:end) < qXt,2), :);            
       
         % Take lsf evaluations
         [mean_post_LSF, var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, px_samples);
