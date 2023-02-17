@@ -185,7 +185,7 @@ LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.MinCostSamples = 10;  
-LALOpts.SelectMax = 1;
+LALOpts.SelectMax = 2;
 LALOpts.ClusterRange = 2:15;
 
 LALOpts.PCK.PCE.Degree = 1:5;
@@ -199,7 +199,10 @@ LALOpts.PCK.PCE.Degree = 1:5;
 %LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
 
-%LALOpts.cleanQuantile = 0.05;
+LALOpts.cleanQuantile = 0.025;
+
+LALOpts.Bus.BatchSize = 5000;
+LALOpts.Bus.MaxSampleSize = 500000;
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
@@ -269,7 +272,7 @@ clear LALOpts
 
 exp_design = FirstLALAnalysis.ExpDesign;
 
-LALOpts.PCK.PCE.Degree = 1:10;
+LALOpts.PCK.PCE.Degree = 1:5;
 %LALOpts.PCK.Kriging.Corr.Type = 'Separable';
 
 LALOpts.Bus.BatchSize = 5000;
@@ -281,15 +284,17 @@ LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 %LALOpts.MinCostSamples = 10;
 %LALOpts.cleanQuantile = 0.15;
 %LALOpts.Ridge = 0.;
-LALOpts.SelectMax = 2;
-LALOpts.ClusterRange = 2:20;
+%LALOpts.SelectMax = 2;
+%LALOpts.ClusterRange = 2:20;
+LALOpts.OptMode = 'single';
+LALOpts.cleanQuantile = 0.025;
 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;
 LALOpts.Validation.PriorSamples = prior_samples;
 LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
-LALOpts.MaximumEvaluations = 5;
+LALOpts.MaximumEvaluations = 15;
 LALOpts.ExpDesign = exp_design;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Bus.Delaunay.maxk = 15;

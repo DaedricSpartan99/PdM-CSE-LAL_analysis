@@ -28,6 +28,7 @@ function [labels, centroids] = kw_means(X, W, k, varargin)
         for i = 1:k
             x_i = X(labels == i,:);
             w_i = W(labels == i);
+
             %if isempty(w_i) 
             %    centroids(i,:) = NaN;
             %else

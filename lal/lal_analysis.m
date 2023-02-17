@@ -139,6 +139,10 @@ function LALAnalysis = lal_analysis(Opts)
         Opts.ClusterMaxIter = 50;
     end
 
+    if ~isfield(Opts, 'OptMode')
+        Opts.OptMode = 'clustering';
+    end
+
     %post_input = Opts.Prior;
     
     % Begin iterations
@@ -227,24 +231,28 @@ function LALAnalysis = lal_analysis(Opts)
                         qxu = quantile(x_prior, 0.975);
                         x_prior = x_prior(all(x_prior > qxb & x_prior < qxu, 2), :);
 
+                        % rescale data via normalization
+                        x_mean = mean(x_prior);
+                        x_std = std(x_prior);
+
                         % Optimize from each point
-                        x0 = [maxl_x0; x_prior(1:10,:)];
-                        xmin = min(x_prior);
-                        xmax = max(x_prior);
+                        z0 = ([maxl_x0; x_prior(1:10,:)] - x_mean) ./ x_std;
+                        xmin = (min(x_prior) - x_mean) ./ x_std;
+                        xmax = (max(x_prior) - x_mean) ./ x_std;
     
                         % determine c from experimental design
                         c_zero_variance = -maxl_logL;
     
                         % define inverse log-likelihood to find the minimum of
-                        f = @(x) -uq_evalModel(logL_PCK, x);
+                        f = @(z) -uq_evalModel(logL_PCK, x_std .* z + x_mean);
 
-                        opt_pck = zeros(size(x0,1),1);
+                        opt_pck = zeros(size(z0,1),1);
 
-                        for opt_ind = 1:size(x0,1)
+                        for opt_ind = 1:size(z0,1)
 
                             % maximize surrogate log-likelihood
                             options = optimoptions('fmincon', 'Display', 'off');
-                            [~, maxl_pck, found_flag] = fmincon(f, x0(opt_ind,:), [], [], [], [], xmin, xmax, [], options);
+                            [~, maxl_pck, found_flag] = fmincon(f, z0(opt_ind,:), [], [], [], [], xmin, xmax, [], options);
         
                             % Take negative log-likelihood (overestimation)
                             if found_flag >= 0
@@ -292,7 +300,7 @@ function LALAnalysis = lal_analysis(Opts)
         %% DEPRECATED
 
         % Control the number of subsets, if too much
-        repeat_SuS = true; % TODO: check with clustering
+        repeat_SuS = false; % TODO: check with clustering
         max_SuS_repeat = 50;
 
         while repeat_SuS && max_SuS_repeat > 0
@@ -306,12 +314,6 @@ function LALAnalysis = lal_analysis(Opts)
             % evaluate U-function on the limit state function
             % Idea: maximize misclassification probability
             px_samples = BusAnalysis.Results.Bus.PostSamples;
-    
-            % Filter out outliers
-            %qXb = quantile(px_samples, 0.025);
-            %qXt = quantile(px_samples, 0.975);
-    
-            %px_samples = px_samples(all(px_samples > qXb & px_samples < qXt,2), :);
             
             % Take evaluations
             [mean_post_LSF, ~] = uq_evalModel(BusAnalysis.Results.Bus.LSF, px_samples);
@@ -349,26 +351,29 @@ function LALAnalysis = lal_analysis(Opts)
 
         %%
 
-        %fprintf("Taking constant logC: %g\n", BayesOpts.Bus.logC)
-        %BusAnalysis = bus_analysis(BayesOpts);
+        fprintf("Taking constant logC: %g\n", BayesOpts.Bus.logC)
+        BusAnalysis = bus_analysis(BayesOpts);
 
         % evaluate U-function on the limit state function
         % Idea: maximize misclassification probability
-        %px_samples = BusAnalysis.Results.Bus.PostSamples;
+        px_samples = BusAnalysis.Results.Bus.PostSamples;
 
-        % squeez SuS samples
-        %x_samples = px_samples(:,2:end);
-        %x_samples = x_samples ./ max(x_samples);
+        % Normalize data before clustering
+        x_mean = mean(px_samples(:,2:end));
+        x_std = std(px_samples(:,2:end));
+        x_norm = (px_samples(:,2:end) - x_mean) ./ x_std;
 
-        %minpts = 50;
-        %kD = pdist2(x_samples,x_samples,'euc','Smallest',minpts);
-        %kD = sort(kD(end,:));
-        %%[~,eps_dbscan_ind] = knee_pt(kD, 1:length(kD));
-        %eps_dbscan = kD(eps_dbscan_ind);
+        minpts = 50;
+        kD = pdist2(x_norm,x_norm,'euc','Smallest',minpts);
+        kD = sort(kD(end,:));
+        [~,eps_dbscan_ind] = knee_pt(kD, 1:length(kD));
+        eps_dbscan = kD(eps_dbscan_ind);
 
-        %dbscan_labels = dbscan(x_samples, eps_dbscan,minpts);
+        dbscan_labels = dbscan(x_norm, eps_dbscan,minpts);
 
-        %px_samples = px_samples(dbscan_labels ~= -1, :);
+        % Filter spacial outliers
+        px_samples = px_samples(dbscan_labels ~= -1, :);
+        x_norm = x_norm(dbscan_labels ~= -1, :);
 
         % Filter out outliers
         %qXb = quantile(px_samples(:,2:end), 0.025);
@@ -385,42 +390,46 @@ function LALAnalysis = lal_analysis(Opts)
         cost_LSF = abs(mean_post_LSF) ./ sqrt(var_post_LSF);
         W = normcdf(-cost_LSF);
         
-        % Normalize data before clustering
-        x_mean = mean(px_samples(:,2:end));
-        x_std = std(px_samples(:,2:end));
-        x_norm = (px_samples(:,2:end) - x_mean) ./ x_std;
+        switch Opts.OptMode
+            case 'clustering'
+                % Cluster (TODO: adapt estimating the number of peaks);
+                if length(Opts.ClusterRange) == 1
+                    [cost_labels, xopt] = kw_means(x_norm, W, max(Opts.ClusterRange), Opts.ClusterMaxIter); 
+                else
+                    [cost_labels, xopt] = w_means(x_norm, W, Opts.ClusterRange, Opts.ClusterMaxIter);
+                end
+        
+                % Un-normalize xopt and sort by weights
+                c_weights = zeros(size(xopt,1),1);
+                for j = 1:length(c_weights)
+                    p_j = px_samples(cost_labels == j,1);
+                    w_j = W(cost_labels == j);
+        
+                    %xopt(j,:) = colwise_weightedMedian(px_samples(cost_labels == j,2:end),w_j);
+                    xopt(j,:) = sum(px_samples(cost_labels == j,2:end) .* w_j) / sum(w_j);
+        
+                    % Take greatest likelihood points
+                    c_weights(j) = sum(p_j .* w_j);
+                    %c_weights(j) = weightedMedian(w_j, p_j);
+                    %c_weights(j) = sum(w_j);
+                end
+        
+                [c_weights, opt_ind] = maxk(c_weights, min(Opts.SelectMax, length(c_weights)));
+                xopt = xopt(opt_ind,:);
 
-        % Cluster (TODO: adapt estimating the number of peaks);
-        if length(Opts.ClusterRange) == 1
-            [cost_labels, xopt] = kw_means(x_norm, W, max(Opts.ClusterRange), Opts.ClusterMaxIter); 
-        else
-            [cost_labels, xopt] = w_means(x_norm, W, Opts.ClusterRange, Opts.ClusterMaxIter);
+            case 'single'
+
+                [~,opt_ind] = min(cost_LSF);
+                xopt = px_samples(opt_ind,2:end);
         end
-
-        % Un-normalize xopt and sort by weights
-        c_weights = zeros(size(xopt,1),1);
-        for j = 1:length(c_weights)
-            p_j = px_samples(cost_labels == j,1);
-            w_j = W(cost_labels == j);
-
-            %xopt(j,:) = colwise_weightedMedian(px_samples(cost_labels == j,2:end),w_j);
-            xopt(j,:) = sum(px_samples(cost_labels == j,2:end) .* w_j) / sum(w_j);
-
-            % Take greatest likelihood points
-            c_weights(j) = mean(p_j .* w_j);
-            %c_weights(j) = weightedMedian(w_j, p_j);
-        end
-
-        [c_weights, opt_ind] = maxk(c_weights, min(Opts.SelectMax, length(c_weights)));
-        xopt = xopt(opt_ind,:);       
     
         fprintf("Optimal X chosen to: ")
         display(xopt)
         fprintf("\n")
 
-        fprintf("With cluster cost: ")
-        display(c_weights)
-        fprintf("\n")
+        %fprintf("With cluster cost: ")
+        %display(c_weights)
+        %fprintf("\n")
 
         % Compute surrogate log-likelihood
         logL_pck_opt = uq_evalModel(logL_PCK, xopt);
