@@ -38,10 +38,10 @@ PriorOpts.Marginals(4).Type = 'LogNormal';
 PriorOpts.Marginals(4).Moments = [30 4.5]*1e9;   % (N/m^2)
 
 PriorOpts.Marginals(5).Name = 'p';               % uniform load
-PriorOpts.Marginals(5).Type = 'Constant';
-PriorOpts.Marginals(5).Parameters = 1.2317e+04;           % (N/m)
-%PriorOpts.Marginals(5).Type = 'Gaussian';
-%PriorOpts.Marginals(5).Moments = [12000 600]; % (N/m)
+%PriorOpts.Marginals(5).Type = 'Constant';
+%PriorOpts.Marginals(5).Parameters = 1.2317e+04;           % (N/m)
+PriorOpts.Marginals(5).Type = 'Gaussian';
+PriorOpts.Marginals(5).Moments = [12000 600]; % (N/m)
 
 myPriorDist = uq_createInput(PriorOpts);
 
@@ -85,7 +85,7 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 5;
+init_eval = 30;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
 LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval);
@@ -130,7 +130,7 @@ PCKOpts.isVectorized = true;
 PCKOpts.ExpDesign.X = init_X;
 PCKOpts.ExpDesign.Y = init_logL;
 
-PCKOpts.PCK.PCE.Degree = 1:10;
+PCKOpts.PCE.Degree = 1:10;
 
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
@@ -175,7 +175,7 @@ drawnow
 
 clear LALOpts
 
-%LALOpts.Bus.logC = 0; %-max(post_logL_samples); % best value: -max log(L) 
+LALOpts.Bus.logC = -32; %-max(post_logL_samples); % best value: -max log(L) 
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
@@ -185,10 +185,10 @@ LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.MinCostSamples = 10;  
-LALOpts.SelectMax = 2;
+LALOpts.SelectMax = 1;
 LALOpts.ClusterRange = 2:15;
 
-LALOpts.PCK.PCE.Degree = 1:5;
+LALOpts.PCK.PCE.Degree = 1:10;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
@@ -200,6 +200,7 @@ LALOpts.PCK.PCE.Degree = 1:5;
 %LALOpts.PCK.Display = 'verbose';
 
 LALOpts.cleanQuantile = 0.025;
+%LALOpts.GradientCost = true;
 
 LALOpts.Bus.BatchSize = 5000;
 LALOpts.Bus.MaxSampleSize = 500000;
@@ -277,6 +278,8 @@ LALOpts.PCK.PCE.Degree = 1:5;
 
 LALOpts.Bus.BatchSize = 5000;
 LALOpts.Bus.MaxSampleSize = 500000;
+
+LALOpts.GradientCost = true;
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;

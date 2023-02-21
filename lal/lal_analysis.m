@@ -143,6 +143,10 @@ function LALAnalysis = lal_analysis(Opts)
         Opts.OptMode = 'clustering';
     end
 
+    if ~isfield(Opts, 'GradientCost')
+        Opts.GradientCost = false;
+    end
+
     %post_input = Opts.Prior;
     
     % Begin iterations
@@ -388,35 +392,68 @@ function LALAnalysis = lal_analysis(Opts)
 
         % Compute U-function and misclassification probability
         cost_LSF = abs(mean_post_LSF) ./ sqrt(var_post_LSF);
+
+        % Compute total cost function
         W = normcdf(-cost_LSF);
+
+        % Include gradient estimation
+        if Opts.GradientCost
+
+            rw_std = x_std / 1e4;
+            grad = zeros(size(mean_post_LSF,1),10);
+            grad_std = zeros(size(mean_post_LSF,1),10);
+
+            for grad_j = 1:10
+                rw = random('normal', 0, rw_std);
+            
+                [rw_mean_post_LSF, rw_var_post_LSF] = uq_evalModel(BusAnalysis.Results.Bus.LSF, px_samples + [0, rw]);
+
+                grad(:,grad_j) = abs(rw_mean_post_LSF - mean_post_LSF) / norm(rw);
+                grad_std(:,grad_j) = sqrt(rw_var_post_LSF + var_post_LSF) / norm(rw);
+            end
+
+            [grad, best_grad] = max(grad, [], 2);
+            grad_std = sum(grad_std .* bsxfun(@eq, cumsum(ones(size(grad_std)), 2), best_grad),2);       
+
+            cost_grad = grad ./ grad_std;
+   
+            W = W .* normcdf(cost_grad);
+        end
         
         switch Opts.OptMode
             case 'clustering'
                 % Cluster (TODO: adapt estimating the number of peaks);
                 if length(Opts.ClusterRange) == 1
-                    [cost_labels, xopt] = kw_means(x_norm, W, max(Opts.ClusterRange), Opts.ClusterMaxIter); 
+                    [cost_labels, c_norm] = kw_means(x_norm, W, max(Opts.ClusterRange), Opts.ClusterMaxIter); 
                 else
-                    [cost_labels, xopt] = w_means(x_norm, W, Opts.ClusterRange, Opts.ClusterMaxIter);
+                    [cost_labels, c_norm] = w_means(x_norm, W, Opts.ClusterRange, Opts.ClusterMaxIter);
                 end
         
                 % Un-normalize xopt and sort by weights
+                xopt = c_norm .* x_std + x_mean;
+
                 c_weights = zeros(size(xopt,1),1);
-                for j = 1:length(c_weights)
+                for j = unique(cost_labels)'
                     p_j = px_samples(cost_labels == j,1);
                     w_j = W(cost_labels == j);
         
                     %xopt(j,:) = colwise_weightedMedian(px_samples(cost_labels == j,2:end),w_j);
-                    xopt(j,:) = sum(px_samples(cost_labels == j,2:end) .* w_j) / sum(w_j);
+                    %xopt(j,:) = sum(px_samples(cost_labels == j,2:end) .* w_j) / sum(w_j);
         
                     % Take greatest likelihood points
                     c_weights(j) = sum(p_j .* w_j);
                     %c_weights(j) = weightedMedian(w_j, p_j);
                     %c_weights(j) = sum(w_j);
                 end
+
+                if size(xopt,1) ~= length(unique(cost_labels))
+                    disp("Inconsistent size")
+                end
         
-                [c_weights, opt_ind] = maxk(c_weights, min(Opts.SelectMax, length(c_weights)));
+                [~, opt_ind] = maxk(c_weights, min(Opts.SelectMax, length(c_weights)));
                 xopt = xopt(opt_ind,:);
 
+                
             case 'single'
 
                 [~,opt_ind] = min(cost_LSF);

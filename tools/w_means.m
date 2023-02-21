@@ -14,7 +14,11 @@ function [labels, centroids] = w_means(X, W, k_range, varargin)
         % take label counts
         [uniques, counts] = count_unique(labels);
 
+        % Filter unused labels and singularities
         centroids = centroids(uniques,:);
+
+        finite_mask = all(isfinite(centroids),2);
+        centroids = centroids(finite_mask,:);
 
         % compute square euclidean distances from overall mean
         F_sqdist = sum((centroids - overall_mean).^2, 2);
@@ -49,4 +53,20 @@ function [labels, centroids] = w_means(X, W, k_range, varargin)
     [uniques, ~] = count_unique(labels);
 
     centroids = centroids(uniques,:);
+
+    if size(centroids,1) ~= length(unique(labels))
+        disp("Inconsistent size")
+    end
+
+    if any(any(~isfinite(centroids),2))
+        disp("Infinite centroid")
+    end
+
+    finite_mask = all(isfinite(centroids),2);
+    centroids = centroids(finite_mask,:);
+    labels = labels(any(labels == uniques(finite_mask)', 2));
+
+    if size(centroids,1) ~= length(unique(labels))
+        disp("Inconsistent size")
+    end
 end

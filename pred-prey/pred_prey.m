@@ -32,16 +32,16 @@ PriorOpts.Marginals(2).Moments = [0.05 0.005];
 %PriorOpts.Marginals(2).Parameters = 0.0309;
 
 PriorOpts.Marginals(3).Name = ('gamma');
-PriorOpts.Marginals(3).Type = 'LogNormal';
-PriorOpts.Marginals(3).Moments = [1 0.1];
-%PriorOpts.Marginals(3).Type = 'Constant';
-%PriorOpts.Marginals(3).Parameters = 0.8929;
+%PriorOpts.Marginals(3).Type = 'LogNormal';
+%PriorOpts.Marginals(3).Moments = [1 0.1];
+PriorOpts.Marginals(3).Type = 'Constant';
+PriorOpts.Marginals(3).Parameters = 0.8929;
 
 PriorOpts.Marginals(4).Name = ('delta');
-PriorOpts.Marginals(4).Type = 'LogNormal';
-PriorOpts.Marginals(4).Moments = [0.05 0.005];
-%PriorOpts.Marginals(4).Type = 'Constant';
-%PriorOpts.Marginals(4).Parameters = 0.0279;
+%PriorOpts.Marginals(4).Type = 'LogNormal';
+%PriorOpts.Marginals(4).Moments = [0.05 0.005];
+PriorOpts.Marginals(4).Type = 'Constant';
+PriorOpts.Marginals(4).Parameters = 0.0279;
 
 PriorOpts.Marginals(5).Name = ('initH');
 PriorOpts.Marginals(5).Type = 'LogNormal';
@@ -133,7 +133,7 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 40;
+init_eval = 30;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
 LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval, 'Sobol');
@@ -232,11 +232,11 @@ drawnow
 
 clear LALOpts
 
-%LALOpts.Bus.logC = 400; %-max(post_logL_samples); % best value: -max log(L) 
+%LALOpts.Bus.logC = 300; %-max(post_logL_samples); % best value: -max log(L) 
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 20;
+LALOpts.MaximumEvaluations = 12;
 LALOpts.ExpDesign.X = init_X;
 LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
@@ -244,9 +244,9 @@ LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Bus.Delaunay.maxk = 50;
  
 LALOpts.SelectMax = 3;
-LALOpts.ClusterRange = 2:8;
+LALOpts.ClusterRange = 2:15;
 
-LALOpts.PCK.PCE.Degree = 1:8;
+LALOpts.PCK.PCE.Degree = 1:15;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
@@ -325,25 +325,125 @@ title('Surrogate PCK likelihood visualization of component 5 and 6')
 
 drawnow
 
+%% Delaunay steps
+
+clear LALOpts
+
+%LALOpts.Bus.logC = 300; %-max(post_logL_samples); % best value: -max log(L) 
+%LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
+%LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
+%LALOpts.Bus.MaxSampleSize = 1e4;
+LALOpts.MaximumEvaluations = 15;
+LALOpts.ExpDesign = FirstLALAnalysis.ExpDesign;
+LALOpts.PlotLogLikelihood = true;
+LALOpts.Bus.CStrategy = 'maxpck';
+%LALOpts.Bus.Delaunay.maxk = 20;
+ 
+%LALOpts.OptMode = 'single';
+LALOpts.SelectMax = 2;
+LALOpts.ClusterRange = 2:20;
+
+LALOpts.PCK.PCE.Degree = 1:15;
+%LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
+%LALOpts.PCK.Optim.Method = 'CMAES';
+%LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
+%LALOpts.PCK.Kriging.Corr.Family = 'Gaussian';
+%LALOpts.PCK.Kriging.Corr.Family = 'Matern-3_2';
+%LALOpts.PCK.Kriging.Corr.Type = 'Separable';
+%LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
+%LALOpts.PCK.Kriging.theta = 9.999;
+%LALOpts.PCK.Display = 'verbose';
+
+LALOpts.cleanQuantile = 0.025;
+
+LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
+LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
+
+% TODO: cross validate
+%LALOpts.Ridge = 0.0;
+
+LALOpts.Bus.BatchSize = 10000;
+LALOpts.Bus.MaxSampleSize = 1000000;
+
+LALOpts.Validation.PostSamples = post_samples;
+LALOpts.Validation.PostLogLikelihood = post_logL_samples;
+LALOpts.Validation.PriorSamples = prior_samples;
+LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
+
+LALOpts.StoreBusResults = true;
+
+DelaunayLALAnalysis = lal_analysis(LALOpts);
+
+fprintf("---   LogC: %f\n", FirstLALAnalysis.logC(end));
+fprintf("---   Found point with likelihood: %f\n", FirstLALAnalysis.OptPoints(end).logL)
+
+
+xopt = DelaunayLALAnalysis.OptPoints(end).X;
+logL_PCK = DelaunayLALAnalysis.PCK(end);
+
+fprintf("---   The surrogate likelihood was: %f\n", uq_evalModel(logL_PCK, xopt))
+
+logL_PCK_grid = uq_evalModel(logL_PCK, Xplot);
+logL_PCK_grid = reshape(logL_PCK_grid, 50, 50);
+
+
+% plot figures
+figure
+tiledlayout(1,2)
+
+ax = nexttile;
+
+hold on
+contourf(ax, Hplot, Lplot, logL_grid);
+colorbar(ax)
+scatter(ax, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
+%surfplot.EdgeColor = 'none';
+%surfplot.FaceAlpha = 0.5;
+%surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
+%surfplot_pck.EdgeColor = 'none';
+%surfplot_pck.FaceAlpha = 0.8;
+hold off
+title('Real likelihood visualization of component 5 and 6')
+
+ax_pck = nexttile;
+
+hold on
+contourf(ax_pck, Hplot, Lplot, logL_PCK_grid);
+colorbar(ax_pck)
+scatter(ax_pck, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
+scatter(ax_pck, xopt(:,a1), xopt(:,a2), 45, "black")
+%surfplot.EdgeColor = 'none';
+%surfplot.FaceAlpha = 0.5;
+%surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
+%surfplot_pck.EdgeColor = 'none';
+%surfplot_pck.FaceAlpha = 0.8;
+hold off
+title('Surrogate PCK likelihood visualization of component 5 and 6')
+
+drawnow
+
 
 %% Finalize
 
 clear LALOpts
 
-%LALOpts.Bus.logC = 400; %-max(post_logL_samples); % best value: -max log(L) 
+LALOpts.Bus.logC = 150; %-max(post_logL_samples); % best value: -max log(L) 
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
 LALOpts.MaximumEvaluations = 10;
-LALOpts.ExpDesign = FirstLALAnalysis.ExpDesign;
+LALOpts.ExpDesign = DelaunayLALAnalysis.ExpDesign;
 LALOpts.PlotLogLikelihood = true;
-LALOpts.Bus.CStrategy = 'delaunay';
-LALOpts.Bus.Delaunay.maxk = 60;
+LALOpts.Bus.CStrategy = 'maxpck';
+%LALOpts.Bus.Delaunay.maxk = 60;
 
-LALOpts.SelectMax = 1;
+LALOpts.Bus.BatchSize = 10000;
+LALOpts.Bus.MaxSampleSize = 1000000;
+
+LALOpts.SelectMax = 2;
 LALOpts.ClusterRange = 2:15;
 
-LALOpts.PCK.PCE.Degree = 1:8;
+LALOpts.PCK.PCE.Degree = 1:15;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
