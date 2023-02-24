@@ -147,6 +147,10 @@ function LALAnalysis = lal_analysis(Opts)
         Opts.GradientCost = false;
     end
 
+    if ~isfield(Opts, 'FilterOutliers')
+        Opts.FilterOutliers = false;
+    end
+
     %post_input = Opts.Prior;
     
     % Begin iterations
@@ -273,7 +277,7 @@ function LALAnalysis = lal_analysis(Opts)
     
                     case 'delaunay'
     
-                        if isfield(Opts.Bus, 'Delaunay') && ~isfield(Opts.Bus.Delaunay, 'maxk')
+                        if ~isfield(Opts.Bus, 'Delaunay') || ~isfield(Opts.Bus.Delaunay, 'maxk')
                             Opts.Bus.Delaunay.maxk = 10;
                         end
     
@@ -367,17 +371,19 @@ function LALAnalysis = lal_analysis(Opts)
         x_std = std(px_samples(:,2:end));
         x_norm = (px_samples(:,2:end) - x_mean) ./ x_std;
 
-        minpts = 50;
-        kD = pdist2(x_norm,x_norm,'euc','Smallest',minpts);
-        kD = sort(kD(end,:));
-        [~,eps_dbscan_ind] = knee_pt(kD, 1:length(kD));
-        eps_dbscan = kD(eps_dbscan_ind);
+        if Opts.FilterOutliers
+            minpts = 50;
+            kD = pdist2(x_norm,x_norm,'euc','Smallest',minpts);
+            kD = sort(kD(end,:));
+            [~,eps_dbscan_ind] = knee_pt(kD, 1:length(kD));
+            eps_dbscan = kD(eps_dbscan_ind);
 
-        dbscan_labels = dbscan(x_norm, eps_dbscan,minpts);
+            dbscan_labels = dbscan(x_norm, eps_dbscan,minpts);
 
-        % Filter spacial outliers
-        px_samples = px_samples(dbscan_labels ~= -1, :);
-        x_norm = x_norm(dbscan_labels ~= -1, :);
+            % Filter spacial outliers
+            px_samples = px_samples(dbscan_labels ~= -1, :);
+            x_norm = x_norm(dbscan_labels ~= -1, :);
+        end
 
         % Filter out outliers
         %qXb = quantile(px_samples(:,2:end), 0.025);

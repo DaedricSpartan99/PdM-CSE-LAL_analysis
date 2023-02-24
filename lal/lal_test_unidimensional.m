@@ -26,8 +26,8 @@ std_disc = [0.1, 0.05, 0.02];
 a = 1.5;
 
 % test singular function
-log_likelihood_handle = @(x, Y) max(log(mean(normpdf((Y-a*x) ./ std_disc) ./ std_disc, 2)), -200);
-log_likelihood = @(x) max(log(mean(normpdf((y-a*x) ./ std_disc) ./ std_disc, 2)), -200);
+log_likelihood_handle = @(x, Y) max(log(mean(normpdf((Y-a*x) ./ std_disc) ./ std_disc, 2)), -400);
+log_likelihood = @(x) max(log(mean(normpdf((y-a*x) ./ std_disc) ./ std_disc, 2)), -400);
 
 %% Analytical solution
 
@@ -61,9 +61,12 @@ legend
 
 %% Create experimental design
 
-init_eval = 5;
+%init_eval = 6;
 
-init_X = uq_getSample(PriorInput, init_eval);
+%init_X = uq_getSample(PriorInput, init_eval);
+
+init_X = [-1.47; -1.44; 0.1090; -0.5877; -0.1903; 1.0143; -2.5958; 1.96; -1.96];
+
 init_logL = log_likelihood(init_X);
 
 %% Initial state
@@ -99,14 +102,18 @@ LALOpts.ExpDesign.LogLikelihood = init_logL;
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 5e4;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e6;
-LALOpts.MaximumEvaluations = 20;
+LALOpts.MaximumEvaluations = 60;
 LALOpts.Bus.CStrategy = 'maxpck';
+%LALOpts.Delaunay.maxk = 10;
 LALOpts.OptMode = 'single';
 
 %LALOpts.SelectMax = 1;
 %LALOpts.ClusterRange = 2:15;
 
-LALOpts.PCK.PCE.Method = 'LARS';
+%LALOpts.PCK.PCE.Method = 'LARS';
+%LALOpts.PCK.Kriging.Corr.Family = 'Gaussian';
+%LALOpts.PCK.Kriging.Corr.Family = 'Matern-5_2';
+%LALOpts.PCK.Kriging.Optim.Bounds = [0.1; 1];
 
 LALOpts.LogLikelihood = log_likelihood;
 LALOpts.Prior = PriorInput;
