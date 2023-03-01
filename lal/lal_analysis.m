@@ -249,7 +249,7 @@ function LALAnalysis = lal_analysis(Opts)
                         xmax = (max(x_prior) - x_mean) ./ x_std;
     
                         % determine c from experimental design
-                        c_zero_variance = -maxl_logL;
+                        c_zero_variance = -maxl_logL;    
     
                         % define inverse log-likelihood to find the minimum of
                         f = @(z) -uq_evalModel(logL_PCK, x_std .* z + x_mean);
@@ -438,10 +438,12 @@ function LALAnalysis = lal_analysis(Opts)
                 % Un-normalize xopt and sort by weights
                 xopt = c_norm .* x_std + x_mean;
 
-                c_weights = zeros(size(xopt,1),1);
-                for j = unique(cost_labels)'
-                    p_j = px_samples(cost_labels == j,1);
-                    w_j = W(cost_labels == j);
+                c_labels = unique(cost_labels);
+                c_weights = zeros(length(c_labels),1);
+                for j = 1:length(c_labels)
+                    lab = c_labels(j);
+                    p_j = px_samples(cost_labels == lab,1);
+                    w_j = W(cost_labels == lab);
         
                     %xopt(j,:) = colwise_weightedMedian(px_samples(cost_labels == j,2:end),w_j);
                     %xopt(j,:) = sum(px_samples(cost_labels == j,2:end) .* w_j) / sum(w_j);

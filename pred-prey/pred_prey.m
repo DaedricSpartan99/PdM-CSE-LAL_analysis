@@ -32,16 +32,16 @@ PriorOpts.Marginals(2).Moments = [0.05 0.005];
 %PriorOpts.Marginals(2).Parameters = 0.0309;
 
 PriorOpts.Marginals(3).Name = ('gamma');
-%PriorOpts.Marginals(3).Type = 'LogNormal';
-%PriorOpts.Marginals(3).Moments = [1 0.1];
-PriorOpts.Marginals(3).Type = 'Constant';
-PriorOpts.Marginals(3).Parameters = 0.8929;
+PriorOpts.Marginals(3).Type = 'LogNormal';
+PriorOpts.Marginals(3).Moments = [1 0.1];
+%PriorOpts.Marginals(3).Type = 'Constant';
+%PriorOpts.Marginals(3).Parameters = 0.8929;
 
 PriorOpts.Marginals(4).Name = ('delta');
-%PriorOpts.Marginals(4).Type = 'LogNormal';
-%PriorOpts.Marginals(4).Moments = [0.05 0.005];
-PriorOpts.Marginals(4).Type = 'Constant';
-PriorOpts.Marginals(4).Parameters = 0.0279;
+PriorOpts.Marginals(4).Type = 'LogNormal';
+PriorOpts.Marginals(4).Moments = [0.05 0.005];
+%PriorOpts.Marginals(4).Type = 'Constant';
+%PriorOpts.Marginals(4).Parameters = 0.0279;
 
 PriorOpts.Marginals(5).Name = ('initH');
 PriorOpts.Marginals(5).Type = 'LogNormal';
@@ -133,7 +133,7 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 30;
+init_eval = 20;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
 LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval, 'Sobol');
@@ -142,9 +142,9 @@ LALOpts.ExpDesign.LogLikelihood = log_likelihood(LALOpts.ExpDesign.X);
 init_X = LALOpts.ExpDesign.X;
 init_logL = LALOpts.ExpDesign.LogLikelihood;
 
-qinit = quantile(init_logL, 0.05);
-init_X = init_X(init_logL > qinit,:);
-init_logL = init_logL(init_logL > qinit);
+%qinit = quantile(init_logL, 0.05);
+%init_X = init_X(init_logL > qinit,:);
+%init_logL = init_logL(init_logL > qinit);
 
 %% Plot of the likelihood in components a1 and a2
 
@@ -171,63 +171,6 @@ logL_grid = log_likelihood(Xplot);
 logL_grid = reshape(logL_grid, 50, 50);
 
 
-%% Construct a PCK which fits good
-
-clear PCKOpts
-
-PCKOpts.Type = 'Metamodel';
-PCKOpts.MetaType = 'PCK';
-PCKOpts.Mode = 'optimal';  
-        
-PCKOpts.Input = refBayesAnalysis.Internal.FullPrior; 
-PCKOpts.isVectorized = true;
-PCKOpts.ExpDesign.X = init_X;
-PCKOpts.ExpDesign.Y = init_logL;
-
-PCKOpts.PCE.Degree = 1:8;
-
-%PCKOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
-
-%PCKOpts.Kriging.CV.LeaveKOut = 3;
-%PCKOpts.Kriging.Optim.Method = 'CMAES';
-PCKOpts.Kriging.Optim.MaxIter = 10000;
-%PCKOpts.Kriging.Optim.Tol = 1e-5;
-%PCKOpts.Kriging.Corr.Family = 'Gaussian';
-%PCKOpts.Kriging.Corr.Family = 'Matern-3_2';
-%PCKOpts.Kriging.Corr.Type = 'Separable';
-%PCKOpts.Kriging.Corr.Type = 'ellipsoidal';
-%PCKOpts.Kriging.theta = 9.999;
-PCKOpts.Display = 'verbose';
-
-PCKOpts.ValidationSet.X = prior_samples;
-PCKOpts.ValidationSet.Y = prior_logL_samples;
-
-logL_PCK = uq_createModel(PCKOpts);
-
-fprintf("---   Leave-one-out error: %f\n", logL_PCK.Error.LOO)
-fprintf("---   Validation error: %f\n", logL_PCK.Error.Val)
-
-figure
-check_interval = [min(prior_logL_samples), max(prior_logL_samples)];
-prior_evals = uq_evalModel(logL_PCK, prior_samples);
-
-hold on
-plot(check_interval , check_interval);
-scatter(prior_logL_samples, prior_evals);
-hold off
-title('Prior samples')
-ylabel('Surrogate Log-Likelihood')
-xlabel('Real Log-Likelihood')
-xlim(check_interval)
-ylim(check_interval)
-
-drawnow
-
-%logL_PCK_grid = uq_evalModel(logL_PCK, Xplot);
-%logL_PCK_grid = reshape(logL_PCK_grid, 50, 50);
-
-
-
 %% Bayesian analysis (tuning first peaks step)
 
 clear LALOpts
@@ -236,28 +179,32 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 12;
+LALOpts.MaximumEvaluations = 40;
 LALOpts.ExpDesign.X = init_X;
 LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Bus.Delaunay.maxk = 50;
+%LALOpts.OptMode = 'single';
  
-LALOpts.SelectMax = 3;
-LALOpts.ClusterRange = 2:15;
+LALOpts.SelectMax = 2;
+LALOpts.ClusterRange = 2;
 
-LALOpts.PCK.PCE.Degree = 1:15;
+LALOpts.PCK.Kriging.Optim.Bounds = [0.1; 100];
+
+LALOpts.PCK.PCE.Degree = 1:10;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
-%LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
-%LALOpts.PCK.Kriging.Corr.Family = 'Gaussian';
-%LALOpts.PCK.Kriging.Corr.Family = 'Matern-3_2';
-%LALOpts.PCK.Kriging.Corr.Type = 'Separable';
-%LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
-%LALOpts.PCK.Kriging.theta = 9.999;
+%LALOpts.PCK.Kriging.Optim.MaxIter = 500;
+%LALOpts.PCK.Kriging.Optim.Tol = 1e-5;
+LALOpts.PCK.Kriging.Corr.Family = 'gaussian';
+%LALOpts.PCK.Kriging.Corr.Family = 'matern-5_2';
+%LALOpts.PCK.Kriging.Corr.Type = 'separable';
+LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
+%LALOpts.PCK.Kriging.Corr.Nugget = 1e-9;
 %LALOpts.PCK.Display = 'verbose';
 
-LALOpts.cleanQuantile = 0.025;
+%LALOpts.cleanQuantile = 0.025;
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
@@ -333,28 +280,33 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 15;
+LALOpts.MaximumEvaluations = 5;
 LALOpts.ExpDesign = FirstLALAnalysis.ExpDesign;
 LALOpts.PlotLogLikelihood = true;
-LALOpts.Bus.CStrategy = 'maxpck';
-%LALOpts.Bus.Delaunay.maxk = 20;
+%LALOpts.Bus.CStrategy = 'maxpck';
+LALOpts.Bus.Delaunay.maxk = 10;
  
-%LALOpts.OptMode = 'single';
-LALOpts.SelectMax = 2;
-LALOpts.ClusterRange = 2:20;
+LALOpts.OptMode = 'single';
+%LALOpts.SelectMax = 2;
+%LALOpts.ClusterRange = 2:20;
 
-LALOpts.PCK.PCE.Degree = 1:15;
+LALOpts.PCK.Kriging.Optim.Bounds = [0.1; 100];
+
+
+LALOpts.PCK.PCE.Degree = 1:10;
+
+%LALOpts.PCK.PCE.Degree = 1:15;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
-%LALOpts.PCK.Kriging.Corr.Family = 'Gaussian';
+LALOpts.PCK.Kriging.Corr.Family = 'gaussian';
 %LALOpts.PCK.Kriging.Corr.Family = 'Matern-3_2';
 %LALOpts.PCK.Kriging.Corr.Type = 'Separable';
-%LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
+LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
 %LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
 
-LALOpts.cleanQuantile = 0.025;
+%LALOpts.cleanQuantile = 0.025;
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
@@ -427,34 +379,36 @@ drawnow
 
 clear LALOpts
 
-LALOpts.Bus.logC = 150; %-max(post_logL_samples); % best value: -max log(L) 
+LALOpts.Bus.logC = 300; %-max(post_logL_samples); % best value: -max log(L) 
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 10;
+LALOpts.MaximumEvaluations = 20;
 LALOpts.ExpDesign = DelaunayLALAnalysis.ExpDesign;
 LALOpts.PlotLogLikelihood = true;
-LALOpts.Bus.CStrategy = 'maxpck';
+%LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Bus.Delaunay.maxk = 60;
 
-LALOpts.Bus.BatchSize = 10000;
-LALOpts.Bus.MaxSampleSize = 1000000;
+%LALOpts.Bus.BatchSize = 10000;
+%LALOpts.Bus.MaxSampleSize = 1000000;
 
 LALOpts.SelectMax = 2;
-LALOpts.ClusterRange = 2:15;
+LALOpts.ClusterRange = 2;
 
-LALOpts.PCK.PCE.Degree = 1:15;
+LALOpts.PCK.Kriging.Optim.Bounds = [0.1; 100];
+LALOpts.PCK.PCE.Degree = 1:10;
+
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
-%LALOpts.PCK.Kriging.Corr.Family = 'Gaussian';
+LALOpts.PCK.Kriging.Corr.Family = 'gaussian';
 %LALOpts.PCK.Kriging.Corr.Family = 'Matern-3_2';
 %LALOpts.PCK.Kriging.Corr.Type = 'Separable';
-%LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
+LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
 %LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
 
-LALOpts.cleanQuantile = 0.025;
+%LALOpts.cleanQuantile = 0.025;
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;

@@ -98,7 +98,8 @@ clear LALOpts
 
 LALOpts.ExpDesign.X = init_X;
 LALOpts.ExpDesign.LogLikelihood = init_logL;
- 
+
+%LALOpts.Bus.logC = -1.9;
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 5e4;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e6;
@@ -107,13 +108,18 @@ LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Delaunay.maxk = 10;
 LALOpts.OptMode = 'single';
 
+%LALOpts.PCK.PCE.Degree = 1:15;
+
+LALOpts.PCK.Kriging.Optim.Bounds = [0.2; 1];
+
+%LALOpts.PCK.Kriging.Optim.Tol = 1e-5;
+LALOpts.PCK.Kriging.Corr.Family = 'gaussian';
+%LALOpts.PCK.Kriging.theta = 9.999;
+
 %LALOpts.SelectMax = 1;
 %LALOpts.ClusterRange = 2:15;
 
 %LALOpts.PCK.PCE.Method = 'LARS';
-%LALOpts.PCK.Kriging.Corr.Family = 'Gaussian';
-%LALOpts.PCK.Kriging.Corr.Family = 'Matern-5_2';
-%LALOpts.PCK.Kriging.Optim.Bounds = [0.1; 1];
 
 LALOpts.LogLikelihood = log_likelihood;
 LALOpts.Prior = PriorInput;
@@ -144,14 +150,17 @@ rplt.Color = [1. 0.2 0.05];%"#EDB120";
 pckplt = plot(xplot, lpck_mean, 'DisplayName', 'PCK log-likelihood')
 pckplt.LineWidth = 3.;
 pckplt.Color = 	"blue";
+
 plt = scatter(LALAnalysis.ExpDesign.X, LALAnalysis.ExpDesign.LogLikelihood, 'Filled', 'DisplayName', 'Enrichement ED points')
 plt.MarkerFaceColor = [0.9290 0.8540 0.1250];
 plt.MarkerEdgeColor = [0. 0. 0];
 plt.LineWidth = 1.;
 
-plt = scatter(init_X, init_logL, 70, 'Filled', 'DisplayName', 'Initial ED')
-plt.MarkerFaceColor = "#77AC30";
+plt = scatter(init_X, init_logL, 40, 'Filled', 'DisplayName', 'Initial ED')
+plt.MarkerFaceColor = "#A2142F";%"#77AC30";
+plt.MarkerFaceAlpha = 0.8;
 plt.MarkerEdgeColor = [0. 0. 0];
+
 hold off
 %title('Final state')
 xlabel('X')
