@@ -3,6 +3,7 @@ rng(100,'twister')
 uqlab
 
 addpath('../lal')
+addpath('../tools')
 
 %% visualize
 
@@ -119,67 +120,15 @@ logL_grid = log_likelihood(Xplot);
 logL_grid = reshape(logL_grid, 50, 50);
 
 
-%% Construct a PCK which fits good
-
-PCKOpts.Type = 'Metamodel';
-PCKOpts.MetaType = 'PCK';
-PCKOpts.Mode = 'optimal';  
-        
-PCKOpts.Input = refBayesAnalysis.Internal.FullPrior; 
-PCKOpts.isVectorized = true;
-PCKOpts.ExpDesign.X = init_X;
-PCKOpts.ExpDesign.Y = init_logL;
-
-PCKOpts.PCE.Degree = 1:10;
-
-%LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
-%LALOpts.PCK.Optim.Method = 'CMAES';
-%LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
-%PCKOpts.PCK.Kriging.Corr.Family = 'Gaussian';
-%PCKOpts.PCK.Kriging.Corr.Family = 'Matern-5_2';
-%PCKOpts.PCK.Kriging.Corr.Type = 'Separable';
-%PCKOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
-%LALOpts.PCK.Kriging.theta = 9.999;
-%LALOpts.PCK.Display = 'verbose';
-
-PCKOpts.ValidationSet.X = prior_samples;
-PCKOpts.ValidationSet.Y = prior_logL_samples;
-
-logL_PCK = uq_createModel(PCKOpts);
-
-fprintf("---   Leave-one-out error: %f\n", logL_PCK.Error.LOO)
-fprintf("---   Validation error: %f\n", logL_PCK.Error.Val)
-
-figure
-check_interval = [min(prior_logL_samples), max(prior_logL_samples)];
-prior_evals = uq_evalModel(logL_PCK, prior_samples);
-
-hold on
-plot(check_interval , check_interval);
-scatter(prior_logL_samples, prior_evals);
-hold off
-title('Prior samples')
-ylabel('Surrogate Log-Likelihood')
-xlabel('Real Log-Likelihood')
-xlim(check_interval)
-ylim(check_interval)
-
-drawnow
-
-%logL_PCK_grid = uq_evalModel(logL_PCK, Xplot);
-%logL_PCK_grid = reshape(logL_PCK_grid, 50, 50);
-
-
-
 %% Bayesian analysis (tuning first peaks step)
 
 clear LALOpts
 
-LALOpts.Bus.logC = -32; %-max(post_logL_samples); % best value: -max log(L) 
+%LALOpts.Bus.logC = -32; %-max(post_logL_samples); % best value: -max log(L) 
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 30;
+LALOpts.MaximumEvaluations = 50;
 LALOpts.ExpDesign.X = init_X;
 LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
@@ -188,18 +137,25 @@ LALOpts.Bus.CStrategy = 'maxpck';
 LALOpts.SelectMax = 1;
 LALOpts.ClusterRange = 2:15;
 
-LALOpts.PCK.PCE.Degree = 1:10;
+%LALOpts.MetaOpts.MetaType = 'Kriging';
+%LALOpts.MetaOpts.Optim.Bounds = [0.05; 1];
+
+LALOpts.MetaOpts.MetaType = 'PCK';
+LALOpts.MetaOpts.PCK.PCE.Degree = 0:3;
+LALOpts.MetaOpts.PCK.Mode = 'optimal';   
+LALOpts.MetaOpts.PCK.Kriging.Optim.Bounds = [0.05; 1];
+LALOpts.MetaOpts.PCK.Kriging.Corr.Family = 'Gaussian';
+
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
-%LALOpts.PCK.Kriging.Corr.Family = 'Gaussian';
 %LALOpts.PCK.Kriging.Corr.Family = 'Matern-3_2';
 %LALOpts.PCK.Kriging.Corr.Type = 'Separable';
 %LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
 %LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
 
-LALOpts.cleanQuantile = 0.025;
+%LALOpts.cleanQuantile = 0.025;
 %LALOpts.GradientCost = true;
 
 LALOpts.Bus.BatchSize = 5000;
@@ -207,6 +163,11 @@ LALOpts.Bus.MaxSampleSize = 500000;
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
+
+LALOpts.DBMinPts = 5;
+
+LALOpts.FilterOutliers = false;
+LALOpts.ClusteredMetaModel = true;
 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;

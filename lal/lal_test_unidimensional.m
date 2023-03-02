@@ -61,11 +61,11 @@ legend
 
 %% Create experimental design
 
-%init_eval = 6;
+init_eval = 10;
 
-%init_X = uq_getSample(PriorInput, init_eval);
+init_X = uq_getSample(PriorInput, init_eval);
 
-init_X = [-1.47; -1.44; 0.1090; -0.5877; -0.1903; 1.0143; -2.5958; 1.96; -1.96];
+%init_X = [-1.47; -1.44; 0.1090; -0.5877; -0.1903; 1.0143; -2.5958; 1.96; -1.96];
 
 init_logL = log_likelihood(init_X);
 
@@ -103,28 +103,34 @@ LALOpts.ExpDesign.LogLikelihood = init_logL;
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 5e4;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e6;
-LALOpts.MaximumEvaluations = 60;
+LALOpts.MaximumEvaluations = 40;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Delaunay.maxk = 10;
 LALOpts.OptMode = 'single';
 
-%LALOpts.PCK.PCE.Degree = 1:15;
-
-LALOpts.PCK.Kriging.Optim.Bounds = [0.2; 1];
+LALOpts.MetaOpts.PCK.PCE.Degree = 0:3;
+LALOpts.MetaOpts.MetaType = 'PCK';
+LALOpts.MetaOpts.PCK.Mode = 'optimal';   
+LALOpts.MetaOpts.PCK.Kriging.Optim.Bounds = [0.2; 1];
+%LALOpts.MetaOpts.MetaType = 'Kriging';
+%LALOpts.MetaOpts.Corr.Family = 'gaussian';
+%LALOpts.MetaOpts.Optim.Bounds = [0.05; 1];
 
 %LALOpts.PCK.Kriging.Optim.Tol = 1e-5;
-LALOpts.PCK.Kriging.Corr.Family = 'gaussian';
+%LALOpts.PCK.Kriging.Corr.Family = 'gaussian';
 %LALOpts.PCK.Kriging.theta = 9.999;
 
 %LALOpts.SelectMax = 1;
 %LALOpts.ClusterRange = 2:15;
 
-%LALOpts.PCK.PCE.Method = 'LARS';
+LALOpts.DBMinPts = 5;
 
 LALOpts.LogLikelihood = log_likelihood;
 LALOpts.Prior = PriorInput;
 
 LALOpts.StoreBusResults = true;
+LALOpts.FilterOutliers = false;
+LALOpts.ClusteredMetaModel = true;
 
 LALAnalysis = lal_analysis(LALOpts);
 

@@ -127,6 +127,10 @@ function LALAnalysis = lal_analysis(Opts)
         LALAnalysis.lsfEvaluations = cell(Opts.MaximumEvaluations,1);
     end
 
+    if ~isfield(Opts, 'ClusteredMetaModel')
+        Opts.ClusteredMetaModel = false;
+    end
+
     if ~isfield(Opts, 'SelectMax')
         Opts.SelectMax = 1;
     end
@@ -157,21 +161,20 @@ function LALAnalysis = lal_analysis(Opts)
     for i = 1:Opts.MaximumEvaluations
 
         % Construct a PC-Kriging surrogate of the log-likelihood
-        if isfield(Opts, 'PCK')
-            PCKOpts = Opts.PCK;
-        end
+        %if isfield(Opts, 'PCK')
+        %    MetaOpts = Opts.PCK;
+        %end
 
         % Create definitive PCK
-        PCKOpts.Type = 'Metamodel';
-        PCKOpts.MetaType = 'PCK';
-        PCKOpts.Mode = 'optimal';   
-        %PCKOpts.FullModel = Opts.LogLikelihood;
-        PCKOpts.Input = Opts.Prior; 
-        PCKOpts.isVectorized = true;
-        
+        MetaOpts = Opts.MetaOpts;
+        MetaOpts.Type = 'Metamodel';
+        %MetaOpts.MetaType = 'PCK';
+        %MetaOpts.Mode = 'optimal';   
+        MetaOpts.Input = Opts.Prior; 
+                
         if isfield(Opts, 'Validation')
-            PCKOpts.ValidationSet.X = Opts.Validation.PostSamples;
-            PCKOpts.ValidationSet.Y = Opts.Validation.PostLogLikelihood;
+            MetaOpts.ValidationSet.X = Opts.Validation.PostSamples;
+            MetaOpts.ValidationSet.Y = Opts.Validation.PostLogLikelihood;
         end
 
         % Address instabilities in the experimental design (0.05 quantile)
@@ -185,18 +188,31 @@ function LALAnalysis = lal_analysis(Opts)
             logL_cleaned = logL;
         end
 
-        % Create definitive PCK
-        PCKOpts.ExpDesign.X = X_cleaned;
-        PCKOpts.ExpDesign.Y = logL_cleaned;
+        % Create MetaModel
+        if Opts.ClusteredMetaModel 
 
-        logL_PCK = uq_createModel(PCKOpts, '-private');
+            ClustModelOpts.MetaOpts = MetaOpts;
+            ClustModelOpts.ExpDesign.X = X_cleaned;
+            ClustModelOpts.ExpDesign.Y = logL_cleaned;
+            %ClustModelOpts.DBEpsilon = Opts.DBEpsilon;
+            ClustModelOpts.DBMinPts = Opts.DBMinPts;
 
-        fprintf("Iteration number: %d\n", i)
-        fprintf("PCK LOO error: %g\n", logL_PCK.Error.LOO)
+            clust_logL_PCK = clustered_PCK(ClustModelOpts);
+            logL_PCK = clust_logL_PCK.MetaModel;
+        else
 
-        if isfield(Opts, 'Validation')
-            fprintf("PCK Validation error: %g\n", logL_PCK.Error.Val)
-        end
+            MetaOpts.ExpDesign.X = X_cleaned;
+            MetaOpts.ExpDesign.Y = logL_cleaned;
+
+            logL_PCK = uq_createModel(MetaOpts, '-private');
+
+            fprintf("Iteration number: %d\n", i)
+            fprintf("PCK LOO error: %g\n", logL_PCK.Error.LOO)
+
+            if isfield(Opts, 'Validation')
+                fprintf("PCK Validation error: %g\n", logL_PCK.Error.Val)
+            end
+        end   
         
         % TODO: Determine optimal c = 1 / max(L)
 
