@@ -40,32 +40,37 @@ posterior = @(x) mean(normpdf((x - post_means) ./ post_std) .* normpdf(y ./ sqrt
 
 %% Analytical solution plot
 
-% validation set
-xplot = linspace(-5, 5, 1000);
-
-% validation
-sum(abs(posterior(xplot') - exp(log_likelihood(xplot')) .* normpdf(xplot') ./ Z))
-trapz(posterior(xplot'), -xplot')
-trapz(exp(log_likelihood(xplot')) .* normpdf(xplot') ./ Z, -xplot')
-
-figure
-hold on
-plot(xplot, normpdf(xplot), 'DisplayName', 'Prior')
-plot(xplot, posterior(xplot'), 'DisplayName', 'Posterior')
-%plot(xplot, exp(log_likelihood(xplot')) .* normpdf(xplot') ./ Z, 'DisplayName', 'Validation')
-hold off
-title('Prior vs Analytical posterior')
-xlabel('X')
-ylabel('Distribution')
-legend
+% % validation set
+% xplot = linspace(-5, 5, 1000);
+% 
+% % validation
+% sum(abs(posterior(xplot') - exp(log_likelihood(xplot')) .* normpdf(xplot') ./ Z))
+% trapz(posterior(xplot'), -xplot')
+% trapz(exp(log_likelihood(xplot')) .* normpdf(xplot') ./ Z, -xplot')
+% 
+% figure
+% hold on
+% plot(xplot, normpdf(xplot), 'DisplayName', 'Prior')
+% plot(xplot, posterior(xplot'), 'DisplayName', 'Posterior')
+% %plot(xplot, exp(log_likelihood(xplot')) .* normpdf(xplot') ./ Z, 'DisplayName', 'Validation')
+% hold off
+% title('Prior vs Analytical posterior')
+% xlabel('X')
+% ylabel('Distribution')
+% legend
 
 %% Create experimental design
 
-init_eval = 10;
+%init_eval = 10;
 
-init_X = uq_getSample(PriorInput, init_eval);
+%init_X = uq_getSample(PriorInput, init_eval);
 
 %init_X = [-1.47; -1.44; 0.1090; -0.5877; -0.1903; 1.0143; -2.5958; 1.96; -1.96];
+
+% Table experiment
+%init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2; -1.8; -0.5];
+%init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2; -1.8];
+%init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2];
 
 init_logL = log_likelihood(init_X);
 
@@ -92,7 +97,7 @@ legend
 
 drawnow
 
-%% Finalize analysis (new peaks complection)
+%% Run analysis
 
 clear LALOpts
 
@@ -103,22 +108,24 @@ LALOpts.ExpDesign.LogLikelihood = init_logL;
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 5e4;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e6;
-LALOpts.MaximumEvaluations = 40;
+LALOpts.MaximumEvaluations = 80;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Delaunay.maxk = 10;
 LALOpts.OptMode = 'single';
 
-LALOpts.MetaOpts.PCK.PCE.Degree = 0:3;
+%LALOpts.MetaOpts.PCK.PCE.Degree = 0:3;
 LALOpts.MetaOpts.MetaType = 'PCK';
 LALOpts.MetaOpts.PCK.Mode = 'optimal';   
-LALOpts.MetaOpts.PCK.Kriging.Optim.Bounds = [0.2; 1];
+LALOpts.MetaOpts.PCK.Kriging.Optim.Bounds = [0.1; 1];
+%LALOpts.MetaOpts.PCK.Kriging.Optim.Tol = 1e-5;
+%LALOpts.MetaOpts.PCK.Kriging.Corr.Family = 'gaussian';
+%LALOpts.MetaOpts.PCK.Kriging.theta = 9.999;
+
 %LALOpts.MetaOpts.MetaType = 'Kriging';
 %LALOpts.MetaOpts.Corr.Family = 'gaussian';
 %LALOpts.MetaOpts.Optim.Bounds = [0.05; 1];
 
-%LALOpts.PCK.Kriging.Optim.Tol = 1e-5;
-%LALOpts.PCK.Kriging.Corr.Family = 'gaussian';
-%LALOpts.PCK.Kriging.theta = 9.999;
+
 
 %LALOpts.SelectMax = 1;
 %LALOpts.ClusterRange = 2:15;
@@ -130,7 +137,7 @@ LALOpts.Prior = PriorInput;
 
 LALOpts.StoreBusResults = true;
 LALOpts.FilterOutliers = false;
-LALOpts.ClusteredMetaModel = true;
+%LALOpts.ClusteredMetaModel = true;
 
 LALAnalysis = lal_analysis(LALOpts);
 
@@ -177,27 +184,27 @@ legend()
 drawnow
 
 %% Prior vs Posterior plot
-
-prior_plot = normpdf(xplot');
-
-ref_posterior = posterior(xplot');
-
-lal_evidence = LALAnalysis.BusAnalysis(end).Results.Evidence;
-lal_posterior = exp(lpck_mean + log(prior_plot)) / lal_evidence;
-
-figure
-hold on
-plot(xplot', prior_plot, 'DisplayName', 'Prior')
-plot(xplot', ref_posterior, 'DisplayName', 'Reference posterior')
-plot(xplot', lal_posterior, 'DisplayName', 'LAL posterior') 
-scatter(LALAnalysis.ExpDesign.X, posterior(LALAnalysis.ExpDesign.X), 'Filled', 'DisplayName', 'Experimental design')
-scatter(init_X, posterior(init_X), 'Filled', 'DisplayName', 'Initial experimental design')
-hold off
-xlabel('X')
-ylabel('Probability density')
-legend
-
-drawnow
+% 
+% prior_plot = normpdf(xplot');
+% 
+% ref_posterior = posterior(xplot');
+% 
+% lal_evidence = LALAnalysis.BusAnalysis(end).Results.Evidence;
+% lal_posterior = exp(lpck_mean + log(prior_plot)) / lal_evidence;
+% 
+% figure
+% hold on
+% plot(xplot', prior_plot, 'DisplayName', 'Prior')
+% plot(xplot', ref_posterior, 'DisplayName', 'Reference posterior')
+% plot(xplot', lal_posterior, 'DisplayName', 'LAL posterior') 
+% scatter(LALAnalysis.ExpDesign.X, posterior(LALAnalysis.ExpDesign.X), 'Filled', 'DisplayName', 'Experimental design')
+% scatter(init_X, posterior(init_X), 'Filled', 'DisplayName', 'Initial experimental design')
+% hold off
+% xlabel('X')
+% ylabel('Probability density')
+% legend
+% 
+% drawnow
 
 %% Evidence convergence (Weak)
 
@@ -221,89 +228,88 @@ drawnow
 
 %% Squared distance error convergence plot (Strong)
 
-xval = uq_getSample(PriorInput, 5000);
-
-% Filter quantiles
-xqU = quantile(xval, 0.975);
-xqB = quantile(xval, 0.025);
-xval = xval((xval < xqU) & (xval > xqB));
-
-strong_err = zeros(1,iterations);
-strong_log_err = zeros(1,iterations);
-pck_err = zeros(1,iterations);
-
-for i = 1:iterations
-    logL = log_likelihood(xval);
-    dl = uq_evalModel(LALAnalysis.BusAnalysis(i).Opts.LogLikelihood, xval) - logL;
-
-    pck_err(i) = mean(dl.^2);
-    strong_log_err(i) = mean(exp(2*logL) .* dl.^2);
-    strong_err(i) = mean(exp(2*logL) .* (exp(dl) - 1).^2);
-end
-
-% Fit errors
-[a,~] = polyfit(1:iterations, log10(strong_err), 1);
-[b,~] = polyfit(1:iterations, log10(strong_log_err), 1);
-[c,~] = polyfit(1:iterations, log10(pck_err), 1);
-
-figure
-hold on
-plot(1:iterations, 10.^(a(1) .* (1:iterations) + a(2)), 'DisplayName', '$||\hat{L} - L||^2_{\pi}$ Fit')
-plot(1:iterations, 10.^(b(1) .* (1:iterations) + b(2)), 'DisplayName', '$||L (\hat{\ell} - \ell)||^2_{\pi}$ Fit')
-plot(1:iterations, 10.^(c(1) .* (1:iterations) + c(2)), 'DisplayName', '$||(\hat{\ell} - \ell)||^2_{\pi}$ Fit')
-scatter(1:iterations, strong_err, 'filled', 'DisplayName', '$||\hat{L} - L||^2_{\pi}$')
-scatter(1:iterations, strong_log_err, 'filled', 'DisplayName', '$||L (\hat{\ell} - \ell)||^2_{\pi}$')
-scatter(1:iterations, pck_err, 'filled', 'DisplayName', '$||(\hat{\ell} - \ell)||^2_{\pi}$')
-hold off
-set(gca, 'YScale', 'log')
-xlabel('Iteration')
-ylabel('Prior strong error')
-title('Prior weighted strong error convergence')
-legend('interpreter','latex')
-
-sprintf("Strong prior error convergence rate: %f", -a(1))
-sprintf("Expected number of iterations to reduce order of magnitude: %d", ceil(-1.0/a(1)))
-
-sprintf("Strong weighted prior log-error convergence rate: %f", -b(1))
-
-sprintf("Log-likelihood PCK convergence rate: %f", -c(1))
-
-drawnow
+% xval = uq_getSample(PriorInput, 5000);
+% 
+% % Filter quantiles
+% xqU = quantile(xval, 0.975);
+% xqB = quantile(xval, 0.025);
+% xval = xval((xval < xqU) & (xval > xqB));
+% 
+% strong_err = zeros(1,iterations);
+% strong_log_err = zeros(1,iterations);
+% pck_err = zeros(1,iterations);
+% 
+% for i = 1:iterations
+%     logL = log_likelihood(xval);
+%     dl = uq_evalModel(LALAnalysis.BusAnalysis(i).Opts.LogLikelihood, xval) - logL;
+% 
+%     pck_err(i) = mean(dl.^2);
+%     strong_log_err(i) = mean(exp(2*logL) .* dl.^2);
+%     strong_err(i) = mean(exp(2*logL) .* (exp(dl) - 1).^2);
+% end
+% 
+% % Fit errors
+% [a,~] = polyfit(1:iterations, log10(strong_err), 1);
+% [b,~] = polyfit(1:iterations, log10(strong_log_err), 1);
+% [c,~] = polyfit(1:iterations, log10(pck_err), 1);
+% 
+% figure
+% hold on
+% plot(1:iterations, 10.^(a(1) .* (1:iterations) + a(2)), 'DisplayName', '$||\hat{L} - L||^2_{\pi}$ Fit')
+% plot(1:iterations, 10.^(b(1) .* (1:iterations) + b(2)), 'DisplayName', '$||L (\hat{\ell} - \ell)||^2_{\pi}$ Fit')
+% plot(1:iterations, 10.^(c(1) .* (1:iterations) + c(2)), 'DisplayName', '$||(\hat{\ell} - \ell)||^2_{\pi}$ Fit')
+% scatter(1:iterations, strong_err, 'filled', 'DisplayName', '$||\hat{L} - L||^2_{\pi}$')
+% scatter(1:iterations, strong_log_err, 'filled', 'DisplayName', '$||L (\hat{\ell} - \ell)||^2_{\pi}$')
+% scatter(1:iterations, pck_err, 'filled', 'DisplayName', '$||(\hat{\ell} - \ell)||^2_{\pi}$')
+% hold off
+% set(gca, 'YScale', 'log')
+% xlabel('Iteration')
+% ylabel('Prior strong error')
+% title('Prior weighted strong error convergence')
+% legend('interpreter','latex')
+% 
+% sprintf("Strong prior error convergence rate: %f", -a(1))
+% sprintf("Expected number of iterations to reduce order of magnitude: %d", ceil(-1.0/a(1)))
+% 
+% sprintf("Strong weighted prior log-error convergence rate: %f", -b(1))
+% 
+% sprintf("Log-likelihood PCK convergence rate: %f", -c(1))
+% 
+% drawnow
 
 %% Experimental design show
 
-figure
-histogram(LALAnalysis.ExpDesign.X, ceil(length(LALAnalysis.ExpDesign.X)/2))
-xlabel('X')
-ylabel('Occurrencies')
-title("Experimental design show up")
-
-drawnow
+% figure
+% histogram(LALAnalysis.ExpDesign.X, ceil(length(LALAnalysis.ExpDesign.X)/2))
+% xlabel('X')
+% ylabel('Occurrencies')
+% title("Experimental design show up")
+% 
+% drawnow
 
 %% Show LOO error relationship
 
-xval = uq_getSample(PriorInput, 10000);
+M = 10000;
+h = 10 / M;
+xval = linspace(-5, 5, M)';
 
-% Filter quantiles
-xqU = quantile(xval, 0.975);
-xqB = quantile(xval, 0.025);
-xval = xval((xval < xqU) & (xval > xqB));
+prior_eval = normpdf(xval);
+    logL = log_likelihood(xval);
 
 pck_post_err = zeros(1,iterations);
 pck_loo_err = zeros(1,iterations);
 pck_prior_err = zeros(1,iterations);
 
 for i = 1:iterations
-    logL = log_likelihood(xval);
     dL = exp(uq_evalModel(LALAnalysis.BusAnalysis(i).Opts.LogLikelihood, xval)) - exp(logL);
 
-    pck_prior_err(i) = mean(dL.^2);
-    pck_post_err(i) = mean(exp(logL) .* dL.^2 ./ Z);
+    pck_prior_err(i) = trapz(xval, dL.^2 .* prior_eval);
+    pck_post_err(i) = trapz(xval, exp(logL) .* dL.^2 .* prior_eval ./ Z);
     pck_loo_err(i) = LALAnalysis.BusAnalysis(i).Opts.LogLikelihood.Error.LOO;
 end
 
 % Select range
-iters = 5:iterations;
+iters = 15:iterations;
 pck_prior_err = pck_prior_err(iters);
 pck_post_err = pck_post_err(iters);
 pck_loo_err = pck_loo_err(iters);
@@ -327,71 +333,75 @@ xlabel('Iteration')
 ylabel('Error')
 %title('Posterior or prior error vs. LOO error')
 grid on
-ylim([min(pck_loo_err) / 10, 1000])
+%ylim([min(pck_loo_err) / 10, 1000])
 legend('interpreter','latex', 'FontSize', 20)
 
-sprintf("Prior validation convergence rate: %f", -c(1))
-sprintf("Posterior validation convergence rate: %f", -a(1))
-sprintf("LOO convergence rate: %f", -b(1))
+fprintf("Prior validation convergence rate: %f\n", -c(1))
+fprintf("Posterior validation convergence rate: %f\n", -a(1))
+fprintf("LOO convergence rate: %f\n", -b(1))
+
+fprintf("Prior validation final error: %g\n", pck_prior_err(end))
+fprintf("Posterior validation final error: %g\n", pck_post_err(end))
+fprintf("LOO convergence rate: %f\n", pck_loo_err(end))
 
 drawnow
 
 %% Execute using MCMC
 
-BayesOpts.Type = 'Inversion';
-BayesOpts.Name = 'User-defined likelihood inversion';
-BayesOpts.Prior = PriorInput;
-BayesOpts.Data.y = y;
-BayesOpts.LogLikelihood = log_likelihood_handle;
-
-refBayesAnalysis = uq_createAnalysis(BayesOpts);
+% BayesOpts.Type = 'Inversion';
+% BayesOpts.Name = 'User-defined likelihood inversion';
+% BayesOpts.Prior = PriorInput;
+% BayesOpts.Data.y = y;
+% BayesOpts.LogLikelihood = log_likelihood_handle;
+% 
+% refBayesAnalysis = uq_createAnalysis(BayesOpts);
 
 %% post sample exctraction and clean up
 
-M = size(refBayesAnalysis.Results.PostProc.PostSample,2); % number of time-steps
-Solver.MCMC.NChains = refBayesAnalysis.Internal.Solver.MCMC.NChains;
+% M = size(refBayesAnalysis.Results.PostProc.PostSample,2); % number of time-steps
+% Solver.MCMC.NChains = refBayesAnalysis.Internal.Solver.MCMC.NChains;
+% 
+% post_samples = permute(refBayesAnalysis.Results.PostProc.PostSample, [1, 3, 2]);
+% post_samples = reshape(post_samples, [], M);
+% post_logL_samples = reshape(refBayesAnalysis.Results.PostProc.PostLogLikeliEval, [], 1);
+% 
+% post_samples = post_samples(post_logL_samples > quantile(post_logL_samples, 0.1), :);
+% post_logL_samples = post_logL_samples(post_logL_samples > quantile(post_logL_samples, 0.1));
+% post_samples_size = size(post_samples, 1); 
 
-post_samples = permute(refBayesAnalysis.Results.PostProc.PostSample, [1, 3, 2]);
-post_samples = reshape(post_samples, [], M);
-post_logL_samples = reshape(refBayesAnalysis.Results.PostProc.PostLogLikeliEval, [], 1);
-
-post_samples = post_samples(post_logL_samples > quantile(post_logL_samples, 0.1), :);
-post_logL_samples = post_logL_samples(post_logL_samples > quantile(post_logL_samples, 0.1));
-post_samples_size = size(post_samples, 1); 
-
-% prepare prior samples
-prior_samples = uq_getSample(refBayesAnalysis.Internal.FullPrior, post_samples_size);
-prior_logL_samples = refBayesAnalysis.LogLikelihood(prior_samples);
-
-prior_samples = prior_samples(prior_logL_samples > quantile(prior_logL_samples, 0.1), :);
-prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL_samples, 0.1));
+% % prepare prior samples
+% prior_samples = uq_getSample(refBayesAnalysis.Internal.FullPrior, post_samples_size);
+% prior_logL_samples = refBayesAnalysis.LogLikelihood(prior_samples);
+% 
+% prior_samples = prior_samples(prior_logL_samples > quantile(prior_logL_samples, 0.1), :);
+% prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL_samples, 0.1));
 
 %% Limit state function plot
-
-xopt = LALAnalysis.OptPoints(end).X;
-logL_PCK = LALAnalysis.PCK(end);
-
-figure
-hold on
-histogram(prior_samples(:,1),50);
-histogram(post_samples(:,1),50); 
-histogram(LALAnalysis.BusAnalysis(end).Results.PostSamples(:,1),50); 
-xline(xopt(:,1), 'LineWidth', 5);
-hold off
-xlabel('X')
-ylabel('Occurences')
-legend('Prior', 'Posterior', 'SuS-Samples', 'Min cost point')
-
-%figure
-%hold on
-%surfplot = surf(xplot, pplot, lsf_eval);
-%surfplot.EdgeColor = 'none';
-%surfplot.FaceAlpha = 0.5;
-%scatter3(lsf_X, lsf_P, lsf_samples_mean, 'Filled')
-%plot3([lsf_X(:),lsf_X(:)]', [lsf_P(:),lsf_P(:)]', [-lsf_samples_std(:),lsf_samples_std(:)]'+lsf_samples_mean(:)', '-r') 
-%hold off
-%xlabel('X')
-%ylabel('P')
-%zlabel('LSF')
-%title('Limit state function')
-%legend('LSF', 'Means', 'Std');
+% 
+% xopt = LALAnalysis.OptPoints(end).X;
+% logL_PCK = LALAnalysis.PCK(end);
+% 
+% figure
+% hold on
+% histogram(prior_samples(:,1),50);
+% histogram(post_samples(:,1),50); 
+% histogram(LALAnalysis.BusAnalysis(end).Results.PostSamples(:,1),50); 
+% xline(xopt(:,1), 'LineWidth', 5);
+% hold off
+% xlabel('X')
+% ylabel('Occurences')
+% legend('Prior', 'Posterior', 'SuS-Samples', 'Min cost point')
+% 
+% figure
+% hold on
+% surfplot = surf(xplot, pplot, lsf_eval);
+% surfplot.EdgeColor = 'none';
+% surfplot.FaceAlpha = 0.5;
+% scatter3(lsf_X, lsf_P, lsf_samples_mean, 'Filled')
+% plot3([lsf_X(:),lsf_X(:)]', [lsf_P(:),lsf_P(:)]', [-lsf_samples_std(:),lsf_samples_std(:)]'+lsf_samples_mean(:)', '-r') 
+% hold off
+% xlabel('X')
+% ylabel('P')
+% zlabel('LSF')
+% title('Limit state function')
+% legend('LSF', 'Means', 'Std');

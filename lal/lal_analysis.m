@@ -249,10 +249,12 @@ function LALAnalysis = lal_analysis(Opts)
                         maxl_x0 = X_cleaned(maxl_index, :);
 
                         % sample from prior distribution for other points
-                        x_prior = uq_getSample(Opts.Prior, 5000);
+                        Opts.Maxpck.priorSamples = 1000;
+                        x_prior = uq_getSample(Opts.Prior, Opts.Maxpck.priorSamples);
 
-                        qxb = quantile(x_prior, 0.025);
-                        qxu = quantile(x_prior, 0.975);
+                        Opts.Maxpck.qbounds = [0.025, 0.975];
+                        qxb = quantile(x_prior, Opts.Maxpck.qbounds(1));
+                        qxu = quantile(x_prior, Opts.Maxpck.qbounds(2));
                         x_prior = x_prior(all(x_prior > qxb & x_prior < qxu, 2), :);
 
                         % rescale data via normalization
@@ -260,7 +262,8 @@ function LALAnalysis = lal_analysis(Opts)
                         x_std = std(x_prior);
 
                         % Optimize from each point
-                        z0 = ([maxl_x0; x_prior(1:10,:)] - x_mean) ./ x_std;
+                        Opts.Maxpck.startPoints = 5;
+                        z0 = ([maxl_x0; x_prior(1:Opts.Maxpck.startPoints,:)] - x_mean) ./ x_std;
                         xmin = (min(x_prior) - x_mean) ./ x_std;
                         xmax = (max(x_prior) - x_mean) ./ x_std;
     

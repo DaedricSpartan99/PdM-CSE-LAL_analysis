@@ -133,7 +133,7 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 20;
+init_eval = 50;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
 LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval, 'Sobol');
@@ -179,7 +179,7 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 40;
+LALOpts.MaximumEvaluations = 100;
 LALOpts.ExpDesign.X = init_X;
 LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
@@ -187,24 +187,32 @@ LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Bus.Delaunay.maxk = 50;
 %LALOpts.OptMode = 'single';
  
-LALOpts.SelectMax = 2;
-LALOpts.ClusterRange = 2;
+LALOpts.SelectMax = 1;
+LALOpts.ClusterRange = 2:15;
 
-LALOpts.PCK.Kriging.Optim.Bounds = [0.1; 100];
+LALOpts.MetaOpts.MetaType = 'PCK';
+LALOpts.MetaOpts.PCK.PCE.Degree = 0:2;
+%LALOpts.MetaOpts.PCK.Mode = 'optimal';   
+LALOpts.MetaOpts.PCK.Kriging.Optim.Bounds = [0.1; 2];
+LALOpts.MetaOpts.PCK.Kriging.Corr.Family = 'Gaussian';
 
-LALOpts.PCK.PCE.Degree = 1:10;
+%LALOpts.PCK.Kriging.Optim.Bounds = [0.1; 100];
+
+%LALOpts.PCK.PCE.Degree = 1:10;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 500;
 %LALOpts.PCK.Kriging.Optim.Tol = 1e-5;
-LALOpts.PCK.Kriging.Corr.Family = 'gaussian';
+%LALOpts.PCK.Kriging.Corr.Family = 'gaussian';
 %LALOpts.PCK.Kriging.Corr.Family = 'matern-5_2';
 %LALOpts.PCK.Kriging.Corr.Type = 'separable';
-LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
+%LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
 %LALOpts.PCK.Kriging.Corr.Nugget = 1e-9;
 %LALOpts.PCK.Display = 'verbose';
 
-%LALOpts.cleanQuantile = 0.025;
+LALOpts.cleanQuantile = 0.025;
+
+
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
@@ -212,8 +220,8 @@ LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 % TODO: cross validate
 %LALOpts.Ridge = 0.0;
 
-LALOpts.Bus.BatchSize = 10000;
-LALOpts.Bus.MaxSampleSize = 1000000;
+LALOpts.Bus.BatchSize = 5000;
+LALOpts.Bus.MaxSampleSize = 500000;
 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;
@@ -221,6 +229,11 @@ LALOpts.Validation.PriorSamples = prior_samples;
 LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
 LALOpts.StoreBusResults = true;
+
+LALOpts.DBMinPts = 5;
+
+LALOpts.FilterOutliers = false;
+LALOpts.ClusteredMetaModel = true;
 
 FirstLALAnalysis = lal_analysis(LALOpts);
 

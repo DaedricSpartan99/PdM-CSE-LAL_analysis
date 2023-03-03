@@ -86,7 +86,7 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 30;
+init_eval = 50;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
 LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval);
@@ -138,12 +138,15 @@ LALOpts.SelectMax = 1;
 LALOpts.ClusterRange = 2:15;
 
 %LALOpts.MetaOpts.MetaType = 'Kriging';
-%LALOpts.MetaOpts.Optim.Bounds = [0.05; 1];
+%LALOpts.MetaOpts.Optim.Bounds = [0.2; 2];
+%LALOpts.MetaOpts.Optim.MaxIter = 100;
+%LALOpts.MetaOpts.Corr.Family = 'Gaussian';
+%LALOpts.MetaOpts.Trend.Type = 'linear';
 
 LALOpts.MetaOpts.MetaType = 'PCK';
-LALOpts.MetaOpts.PCK.PCE.Degree = 0:3;
+LALOpts.MetaOpts.PCK.PCE.Degree = 0:2;
 LALOpts.MetaOpts.PCK.Mode = 'optimal';   
-LALOpts.MetaOpts.PCK.Kriging.Optim.Bounds = [0.05; 1];
+LALOpts.MetaOpts.PCK.Kriging.Optim.Bounds = [0.01; 2];
 LALOpts.MetaOpts.PCK.Kriging.Corr.Family = 'Gaussian';
 
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
@@ -155,7 +158,7 @@ LALOpts.MetaOpts.PCK.Kriging.Corr.Family = 'Gaussian';
 %LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
 
-%LALOpts.cleanQuantile = 0.025;
+LALOpts.cleanQuantile = 0.025;
 %LALOpts.GradientCost = true;
 
 LALOpts.Bus.BatchSize = 5000;
@@ -187,46 +190,46 @@ logL_PCK = FirstLALAnalysis.PCK(end);
 
 fprintf("---   The surrogate likelihood was: %f\n", uq_evalModel(logL_PCK, xopt))
 
-logL_PCK_grid = uq_evalModel(logL_PCK, Xplot);
-logL_PCK_grid = reshape(logL_PCK_grid, 50, 50);
-
-
-% plot figures
-figure
-tiledlayout(1,2)
-
-ax = nexttile;
-
-hold on
-contourf(ax, Hplot, Lplot, logL_grid);
-colorbar(ax)
-scatter(ax, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
-%surfplot.EdgeColor = 'none';
-%surfplot.FaceAlpha = 0.5;
-%surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
-%surfplot_pck.EdgeColor = 'none';
-%surfplot_pck.FaceAlpha = 0.8;
-hold off
-title('Real likelihood visualization of component 1 and 2')
-
-ax_pck = nexttile;
-
-hold on
-contourf(ax_pck, Hplot, Lplot, logL_PCK_grid);
-colorbar(ax_pck)
-scatter(ax_pck, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
-scatter(ax_pck, xopt(:,a1), xopt(:,a2), 45, "black")
-%surfplot.EdgeColor = 'none';
-%surfplot.FaceAlpha = 0.5;
-%surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
-%surfplot_pck.EdgeColor = 'none';
-%surfplot_pck.FaceAlpha = 0.8;
-hold off
-title('Surrogate PCK likelihood visualization of component 1 and 2')
-
-sgtitle('Initial state log-likelihood')
-
-drawnow
+% logL_PCK_grid = uq_evalModel(logL_PCK, Xplot);
+% logL_PCK_grid = reshape(logL_PCK_grid, 50, 50);
+% 
+% 
+% % plot figures
+% figure
+% tiledlayout(1,2)
+% 
+% ax = nexttile;
+% 
+% hold on
+% contourf(ax, Hplot, Lplot, logL_grid);
+% colorbar(ax)
+% scatter(ax, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
+% %surfplot.EdgeColor = 'none';
+% %surfplot.FaceAlpha = 0.5;
+% %surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
+% %surfplot_pck.EdgeColor = 'none';
+% %surfplot_pck.FaceAlpha = 0.8;
+% hold off
+% title('Real likelihood visualization of component 1 and 2')
+% 
+% ax_pck = nexttile;
+% 
+% hold on
+% contourf(ax_pck, Hplot, Lplot, logL_PCK_grid);
+% colorbar(ax_pck)
+% scatter(ax_pck, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
+% scatter(ax_pck, xopt(:,a1), xopt(:,a2), 45, "black")
+% %surfplot.EdgeColor = 'none';
+% %surfplot.FaceAlpha = 0.5;
+% %surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
+% %surfplot_pck.EdgeColor = 'none';
+% %surfplot_pck.FaceAlpha = 0.8;
+% hold off
+% title('Surrogate PCK likelihood visualization of component 1 and 2')
+% 
+% sgtitle('Initial state log-likelihood')
+% 
+% drawnow
 
 %% Finalize
 
