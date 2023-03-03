@@ -131,12 +131,12 @@ function LALAnalysis = lal_analysis(Opts)
         Opts.ClusteredMetaModel = false;
     end
 
-    if ~isfield(Opts, 'SelectMax')
-        Opts.SelectMax = 1;
+    if ~isfield(Opts, 'ClusterRange')
+        Opts.ClusterRange = 3;
     end
 
-    if ~isfield(Opts, 'ClusterRange')
-        Opts.ClusterRange = 2:6;
+    if ~isfield(Opts, 'SelectMax')
+        Opts.SelectMax = min(Opts.ClusterRange);
     end
 
     if ~isfield(Opts, 'ClusterMaxIter')
@@ -324,59 +324,7 @@ function LALAnalysis = lal_analysis(Opts)
                 end
             end
 
-        %% DEPRECATED
-
-        % Control the number of subsets, if too much
-        repeat_SuS = false; % TODO: check with clustering
-        max_SuS_repeat = 50;
-
-        while repeat_SuS && max_SuS_repeat > 0
-
-            repeat_SuS = false;
-
-            fprintf("Taking constant logC: %g\n", BayesOpts.Bus.logC)
-
-            BusAnalysis = bus_analysis(BayesOpts);
-
-            % evaluate U-function on the limit state function
-            % Idea: maximize misclassification probability
-            px_samples = BusAnalysis.Results.Bus.PostSamples;
-            
-            % Take evaluations
-            [mean_post_LSF, ~] = uq_evalModel(BusAnalysis.Results.Bus.LSF, px_samples);
-    
-            if size(px_samples,1) < 10
-                % Pathological points case
-                fprintf("No point was found to be reliable. Repeating subset simulation with higher log(c)...\n")
-                repeat_SuS = true;
-            end
- 
-            % Check for enough posterior samples
-            sus_ratio = 1.0 * sum(mean_post_LSF < 0) / size(mean_post_LSF,1);
-            if sus_ratio < 0.1
-                fprintf("There aren't enough posterior samples. Repeating subset simulation with higher log(c)...\n")
-                fprintf("Proportion: %f\n", sus_ratio)
-                repeat_SuS = true;
-            end    
-            
-            if repeat_SuS
-
-                %h = BusAnalysis.Results.Subset.History.q;
-
-                %if length(h) < 2 || sum(mean_post_LSF < 0) == 0
-                    BayesOpts.Bus.logC = mean([BayesOpts.Bus.logC, -max(logL)]);
-                %else
-                    % Take last subset threshold
-                    %BayesOpts.Bus.logC = BayesOpts.Bus.logC + quantile(mean_post_LSF,0.1);
-                %end
-            end
-
-            fprintf("Taking constant logC: %g\n", BayesOpts.Bus.logC)
-
-            max_SuS_repeat = max_SuS_repeat - 1;
-        end
-
-        %%
+        %% Perform Bus Analysis
 
         fprintf("Taking constant logC: %g\n", BayesOpts.Bus.logC)
         BusAnalysis = bus_analysis(BayesOpts);
@@ -447,9 +395,19 @@ function LALAnalysis = lal_analysis(Opts)
         
         switch Opts.OptMode
             case 'clustering'
-                % Cluster (TODO: adapt estimating the number of peaks);
+            
                 if length(Opts.ClusterRange) == 1
-                    [cost_labels, c_norm] = kw_means(x_norm, W, max(Opts.ClusterRange), Opts.ClusterMaxIter); 
+                    [cost_labels, c_norm] = kw_means(x_norm, W, Opts.ClusterRange, Opts.ClusterMaxIter); 
+                
+                    % Check consistency
+                    [c_uniques, ~] = count_unique(cost_labels);
+
+                    c_norm = c_norm(c_uniques,:);
+
+                    % clean up singularities
+                    finite_mask = all(isfinite(c_norm),2);
+                    c_norm = c_norm(finite_mask,:);
+                    cost_labels = cost_labels(any(cost_labels == c_uniques(finite_mask)', 2));
                 else
                     [cost_labels, c_norm] = w_means(x_norm, W, Opts.ClusterRange, Opts.ClusterMaxIter);
                 end

@@ -133,10 +133,10 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 50;
+init_eval = 30;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
-LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval, 'Sobol');
+LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval);
 LALOpts.ExpDesign.LogLikelihood = log_likelihood(LALOpts.ExpDesign.X);
 
 init_X = LALOpts.ExpDesign.X;
@@ -179,7 +179,7 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 100;
+LALOpts.MaximumEvaluations = 23;
 LALOpts.ExpDesign.X = init_X;
 LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
@@ -187,8 +187,8 @@ LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Bus.Delaunay.maxk = 50;
 %LALOpts.OptMode = 'single';
  
-LALOpts.SelectMax = 1;
-LALOpts.ClusterRange = 2:15;
+%LALOpts.SelectMax = 1;
+LALOpts.ClusterRange = 3;
 
 LALOpts.MetaOpts.MetaType = 'PCK';
 LALOpts.MetaOpts.PCK.PCE.Degree = 0:2;
@@ -217,8 +217,6 @@ LALOpts.cleanQuantile = 0.025;
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 
-% TODO: cross validate
-%LALOpts.Ridge = 0.0;
 
 LALOpts.Bus.BatchSize = 5000;
 LALOpts.Bus.MaxSampleSize = 500000;

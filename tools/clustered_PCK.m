@@ -64,8 +64,8 @@ function cpck = clustered_PCK(Opts)
 
     %% Include outliers in ED by distance minimization (similar to classification)
 
-    outZ = cpck.norm.Z(dbscan_labels == -1);
-    distances = pdist2(outZ, cpck.norm.Z(dbscan_labels ~= -1),'euc');
+    outZ = cpck.norm.Z(dbscan_labels == -1,:);
+    distances = pdist2(outZ, cpck.norm.Z(dbscan_labels ~= -1,:),'euc');
 
     [~, idx] = min(distances, [], 2);
     labels_no_out = dbscan_labels(dbscan_labels ~= -1);
