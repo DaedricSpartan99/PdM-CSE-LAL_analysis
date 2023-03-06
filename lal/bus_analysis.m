@@ -66,11 +66,15 @@ function BayesianAnalysis = bus_analysis(BayesOpts)
     BayesianAnalysis.Results.Evidence = exp(log(SSimAnalysis.Results.Pf) - BayesOpts.Bus.logC);
     BayesianAnalysis.Results.Subset = SSimAnalysis.Results;
     History = {SSimAnalysis.Results.History.X};
-    BayesianAnalysis.Results.PostSamples = History{end}{end}(:,2:end);
 
+    
+    %BayesianAnalysis.Results.PostSamples = History{end}{end}(:,2:end);
+
+    % Quasi-posterior samples and evaluations
     BayesianAnalysis.Results.Bus.LSF = SSOpts.Model;
     BayesianAnalysis.Results.Bus.PostSamples = History{end}{end};
 
+    % Options
     BayesianAnalysis.Opts = BayesOpts;
    
 end

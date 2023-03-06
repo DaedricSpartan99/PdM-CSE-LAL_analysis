@@ -90,9 +90,9 @@ function LALAnalysis = lal_analysis(Opts)
         T = X * W_pca(:,1:2);
         Tpost = Opts.Validation.PostSamples * W_pca(:,1:2);
         hold on
-        pca_scatter = scatter(ax4, T(:,1), T(:,2), 20, logL, 'Filled')
-        pca_colorbar = colorbar(ax4)
-        pca_post_scatter = scatter(ax4, Tpost(:,1), Tpost(:,2), 5)
+        pca_scatter = scatter(ax4, T(:,1), T(:,2), 20, logL, 'Filled');
+        pca_colorbar = colorbar(ax4);
+        pca_post_scatter = scatter(ax4, Tpost(:,1), Tpost(:,2), 5);
         hold off
         title(ax4, 'Experimental design PCA')
         xlabel(ax4, 'x1')
@@ -107,7 +107,7 @@ function LALAnalysis = lal_analysis(Opts)
         hist_plots = cell(size(X,2),1);
 
         for k = 1:size(X,2)
-            hist_plots{k}.ax = nexttile
+            hist_plots{k}.ax = nexttile;
 
             hold on
             hist_plots{k}.Prior = histogram(Opts.Validation.PriorSamples(:,k),50);
@@ -160,16 +160,11 @@ function LALAnalysis = lal_analysis(Opts)
     % Begin iterations
     for i = 1:Opts.MaximumEvaluations
 
-        % Construct a PC-Kriging surrogate of the log-likelihood
-        %if isfield(Opts, 'PCK')
-        %    MetaOpts = Opts.PCK;
-        %end
+        %% Construct a PC-Kriging surrogate of the log-likelihood
 
         % Create definitive PCK
         MetaOpts = Opts.MetaOpts;
         MetaOpts.Type = 'Metamodel';
-        %MetaOpts.MetaType = 'PCK';
-        %MetaOpts.Mode = 'optimal';   
         MetaOpts.Input = Opts.Prior; 
                 
         if isfield(Opts, 'Validation')
@@ -392,6 +387,8 @@ function LALAnalysis = lal_analysis(Opts)
    
             W = W .* normcdf(cost_grad);
         end
+
+        %% Determine optimal sample
         
         switch Opts.OptMode
             case 'clustering'
@@ -515,9 +512,35 @@ function LALAnalysis = lal_analysis(Opts)
         end
     end
 
-    % Store results
+    %% Run a latest subset simulation starting from max of experimental design
+
+    fprintf("Finalizing Bayesian analysis\n")
+    fprintf("Constant log(c) = %f\n", -max(logL))
+
+    BayesOpts.Bus = Opts.Bus;
+    BayesOpts.Bus.logC = -max(logL);
+    BayesOpts.Prior = Opts.Prior;
+
+    BayesOpts.Bus.BatchSize = 10000;
+    BayesOpts.Bus.MaxSampleSize = 1000000;
+
+    BusAnalysis = bus_analysis(BayesOpts);
+
+    px_samples = BusAnalysis.Results.Bus.PostSamples;
+
+    %% Store results
+
+    % Experimental design
     LALAnalysis.ExpDesign.X = X;
     LALAnalysis.ExpDesign.LogLikelihood = logL;
     LALAnalysis.ExpDesign.UnNormPosterior = post;
+
+    % Posterior samples
+    LALAnalysis.PostSamples = px_samples(mean_post_LSF < 0, 2:end); 
+
+    % Evidence estimation
+    LALAnalysis.Evidence = BusAnalysis.Results.Evidence;
+
+    % Options
     LALAnalysis.Opts = Opts;
 end
