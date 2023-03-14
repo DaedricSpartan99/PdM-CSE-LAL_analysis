@@ -52,13 +52,14 @@ myData.y = [12.84; 13.12; 12.13; 12.19; 12.67]/1000; % (m)
 myData.Name = 'Mid-span deflection';
 
 DiscrepancyOpts(1).Type = 'Gaussian';
-DiscrepancyOpts(1).Parameters = 1e-5;%var(myData.y);
+DiscrepancyOpts(1).Parameters = 1.2448e-06;%var(myData.y);
+% Discrepancy standard deviation of the variance: 1.7026e-06
 
 %% Bayesian invertion
 
 BayesOpts.Type = 'Inversion';
 BayesOpts.Data = myData;
-%BayesOpts.Discrepancy = DiscrepancyOpts;
+BayesOpts.Discrepancy = DiscrepancyOpts;
 
 refBayesAnalysis = uq_createAnalysis(BayesOpts);
 
@@ -86,29 +87,12 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 70;
+init_eval = 5;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
 LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval);
 LALOpts.ExpDesign.LogLikelihood = log_likelihood(LALOpts.ExpDesign.X);
 
-% add extremely small value for third parameter
-% take random points and assign a greedy analytical value
-disc_guess = min(LALOpts.ExpDesign.X(:,3)) / 10.;
-
-[~,greedy_ind] = maxk(LALOpts.ExpDesign.LogLikelihood,10);
-x_greedy = LALOpts.ExpDesign.X(greedy_ind,:);
-x_greedy(:,3) = disc_guess;
-logL_greedy = log_likelihood(x_greedy);
-
-ql = quantile(LALOpts.ExpDesign.LogLikelihood, 0.05);
-
-LALOpts.ExpDesign.X = [LALOpts.ExpDesign.X; x_greedy];
-LALOpts.ExpDesign.LogLikelihood = [LALOpts.ExpDesign.LogLikelihood; logL_greedy];
-
-% remove incredibly small points
-LALOpts.ExpDesign.X = LALOpts.ExpDesign.X(LALOpts.ExpDesign.LogLikelihood > ql,:);
-LALOpts.ExpDesign.LogLikelihood = LALOpts.ExpDesign.LogLikelihood(LALOpts.ExpDesign.LogLikelihood > ql);
 
 init_X = LALOpts.ExpDesign.X;
 init_logL = LALOpts.ExpDesign.LogLikelihood;
@@ -122,14 +106,14 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 20;
+LALOpts.MaximumEvaluations = 10;
 LALOpts.ExpDesign.X = init_X;
 LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.MinCostSamples = 10;  
 %LALOpts.SelectMax = 1;
-LALOpts.ClusterRange = 3;
+LALOpts.ClusterRange = 2;
 
 %LALOpts.MetaOpts.MetaType = 'Kriging';
 %LALOpts.MetaOpts.Optim.Bounds = [0.2; 2];
@@ -140,7 +124,7 @@ LALOpts.ClusterRange = 3;
 LALOpts.MetaOpts.MetaType = 'PCK';
 LALOpts.MetaOpts.PCE.Degree = 0:2;
 LALOpts.MetaOpts.Mode = 'optimal';   
-LALOpts.MetaOpts.Kriging.Optim.Bounds = [0.2, 0.2, 0.01; 100, 100, 2];
+LALOpts.MetaOpts.Kriging.Optim.Bounds = [0.2; 5];
 LALOpts.MetaOpts.Kriging.Corr.Family = 'gaussian';
 
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
@@ -161,10 +145,10 @@ LALOpts.Bus.MaxSampleSize = 500000;
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 
-LALOpts.DBMinPts = 5;
+%LALOpts.DBMinPts = 5;
 
 %LALOpts.FilterOutliers = false;
-LALOpts.ClusteredMetaModel = true;
+%LALOpts.ClusteredMetaModel = true;
 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;
@@ -223,12 +207,12 @@ TT = [post_samples; X];
 idx = [zeros(post_samples_size,1); 2 * ones(size(init_X,1),1); ones(size(X,1) - size(init_X,1),1)];
 labeledGroups = categorical(idx, [0 2 1], group);
 
-xnames = {'Load', 'Young modulus', 'Discrepancy variance'};
+xnames = {'Load', 'Young modulus'};
 
 figure
 gplotmatrix(TT, [] ,labeledGroups,color,'.oo',[],[],'grpbars',xnames)
 
-exportgraphics(gcf,'../../final_results/ssb/gplotmatrix.eps')%,'ContentType','vector')
+exportgraphics(gcf,'../../final_results/ssb_fixed/gplotmatrix.eps')%,'ContentType','vector')
 
 drawnow
 
@@ -286,21 +270,3 @@ sprintf("Prior validation convergence rate: %f", -c(1))
 sprintf("Posterior validation convergence rate: %f", -a(1))
 sprintf("LOO convergence rate: %f", -b(1))
 
-
-%% Limit state function check
-
-figure
-tiledlayout(size(prior_samples,2),1)
-
-for k = 1:size(prior_samples,2)
-    nexttile
-
-    hold on
-    histogram(prior_samples(:,k),50);
-    histogram(LALAnalysis.BusAnalysis(end).Results.PostSamples(:,k),50); 
-    histogram(post_samples(:,k),50); 
-    xline(xopt(:,k), 'LineWidth', 5);
-    hold off
-    legend('Prior', 'SuS-Samples', 'Posterior', 'Min cost point')
-    title(sprintf('Component %d',k))
-end

@@ -17,10 +17,10 @@ PriorInput = uq_createInput(PriorOpts);
 %% Likelihood definition
 
 % peaks position
-y = [1.5, -1.];%, -2.5];
+y = [1.5, -1., -2.5];
 
 % peaks extension
-std_disc = [0.1, 0.05]; %, 0.02];
+std_disc = [0.1, 0.05, 0.02];
 
 % distance scaling
 a = 1.5;
@@ -68,10 +68,10 @@ posterior = @(x) mean(normpdf((x - post_means) ./ post_std) .* normpdf(y ./ sqrt
 %init_X = [-1.47; -1.44; 0.1090; -0.5877; -0.1903; 1.0143; -2.5958; 1.96; -1.96];
 
 % Two peaks
-init_X = [0.1090; -0.5877; -0.1903; 1.0143; -2.5958; -1.1672; 0.4420; 0.9379; -1.0952; 0.1894];
+%init_X = [0.1090; -0.5877; -0.1903; 1.0143; -2.5958; -1.1672; 0.4420; 0.9379; -1.0952; 0.1894];
 
 % Table experiment
-%init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2; -1.8; -0.5];
+init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2; -1.8; -0.5];
 %init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2; -1.8];
 %init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2];
 
@@ -84,7 +84,7 @@ xplot = linspace(-5, 5, 1000);
 
 figure
 hold on
-plt = plot(xplot, log(normpdf(xplot)), '--', 'DisplayName', 'Prior', 'LineWidth',2)
+plt = plot(xplot, log(normpdf(xplot)), '--', 'DisplayName', 'Log-Prior', 'LineWidth',2)
 plt.Color = "#EDB120";
 plot(xplot', log_likelihood(xplot'), 'b-', 'DisplayName', 'Log-likelihood', 'LineWidth',2)         
 plt = scatter(init_X, init_logL, 70, 'Filled', 'DisplayName', 'Experimental design')
@@ -94,7 +94,8 @@ plt.LineWidth = 2.;
 hold off
 %title('Initial state')
 xlabel('X')
-ylabel('Distribution')
+ylabel('Log-P.D.F')
+ylim([-400, 150])
 grid on
 legend
 
@@ -371,8 +372,8 @@ lal_prior_logL_samples = lalBayesAnalysis.LogLikelihood(prior_samples);
 figure
 hold on
 histogram(prior_samples,100, 'Normalization', 'pdf');
-histogram(post_samples,100, 'Normalization', 'pdf'); 
-histogram(LALAnalysis.PostSamples,100, 'Normalization', 'pdf', 'FaceColor', "#7E2F8E"); 
+histogram(post_samples,100, 'Normalization', 'pdf', 'FaceColor', "#EDB120", 'FaceAlpha', 1, 'EdgeColor', 'none'); 
+histogram(LALAnalysis.PostSamples,100, 'Normalization', 'pdf', 'FaceColor', "#7E2F8E", 'EdgeColor', 'none'); 
 hold off
 xlabel('X')
 ylabel('P.d.f')
@@ -382,10 +383,67 @@ legend('Prior', 'Ref. MCMC Posterior', 'BuS Post. samples')
 figure
 hold on
 histogram(prior_samples,100, 'Normalization', 'pdf');
-histogram(post_samples,100, 'Normalization', 'pdf'); 
-histogram(lal_post_samples,100, 'Normalization', 'pdf'); 
+histogram(post_samples,100, 'Normalization', 'pdf', 'FaceColor', "#EDB120", 'FaceAlpha', 1, 'EdgeColor', 'none'); 
+histogram(lal_post_samples,100, 'Normalization', 'pdf', 'FaceColor', 	"#A2142F", 'EdgeColor', 'none'); 
 hold off
 xlabel('X')
 ylabel('P.d.f')
 legend('Prior', 'Ref. MCMC Posterior', 'LAL MCMC Posterior')
 
+%% Posterior validation plot
+
+figure
+hold on
+hg = qqplot(post_samples, LALAnalysis.PostSamples);
+set(hg(1),'marker','o','markersize',3,'markeredgecolor',[0 0 0]);
+hg = qqplot(post_samples, lal_post_samples);
+set(hg(1),'markersize',3)
+hold off
+xlabel('Reference MCMC posterior samples')
+ylabel('Posterior samples')
+legend('LAL MCMC', 'SuS')
+
+%figure
+%qqplot(post_samples, lal_post_samples)
+%xlabel('Reference MCMC posterior samples')
+%ylabel('LAL MCMC posterior samples')
+
+%% Statistical tests
+
+[bus_ks, p_bus_ks] = kstest2(post_samples, LALAnalysis.PostSamples);
+[lal_ks, p_lal_ks] = kstest2(post_samples, lal_post_samples);
+
+fprintf('Null hypothesis: same distribution\n')
+fprintf('P-value SuS samples: %f, hypothesis rejected: %d\n',p_bus_ks, bus_ks)
+fprintf('P-value LAL MCMC samples: %f, hypothesis rejected: %d\n', p_lal_ks, lal_ks)
+
+%% SSLE test
+
+clear BayesOpts
+clear Solver
+
+Solver.Type = 'SSLE';
+
+% Expansion options
+Solver.SSLE.ExpOptions.Degree = 0:6;
+
+% Experimental design options
+Solver.SSLE.ExpDesign.X = LALAnalysis.ExpDesign.X;
+Solver.SSLE.ExpDesign.Y = exp(LALAnalysis.ExpDesign.LogLikelihood);
+
+%Solver.SSLE.ExpDesign.NSamples = 1000;
+%Solver.SSLE.ExpDesign.NEnrich = 100;
+
+BayesOpts.Type = 'Inversion';
+%BayesOpts.Name = 'User-defined likelihood inversion';
+BayesOpts.Solver = Solver;
+BayesOpts.Prior = PriorInput;
+BayesOpts.Data.y = y;
+BayesOpts.LogLikelihood = log_likelihood_handle;
+
+ssleBayesAnalysis = uq_createAnalysis(BayesOpts);
+
+%% Display results
+
+uq_postProcessInversion(ssleBayesAnalysis, 'dependence', true)
+uq_display(ssleBayesAnalysis)

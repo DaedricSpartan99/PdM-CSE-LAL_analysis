@@ -78,6 +78,7 @@ function cpck = clustered_PCK(Opts)
     %% Train models
     
     cpck.models = cell(nb_labels,1);
+    loo_errors = zeros(nb_labels,1);
 
     for i = 1:nb_labels
 
@@ -86,9 +87,11 @@ function cpck = clustered_PCK(Opts)
         MetaOpts.ExpDesign.Y = Opts.ExpDesign.Y(cpck.labels == i,:);
 
         cpck.models{i} = uq_createModel(MetaOpts, '-private');
+        loo_errors(i) = cpck.models{i}.Error.LOO;
     end
 
     cpck.Options = Opts;
+    cpck.Error.LOO = max(loo_errors(i));
 
     %% Setup UQ Metamodel
     MetaModelOpts.mFile = 'clustered_PCK_eval';
@@ -96,4 +99,7 @@ function cpck = clustered_PCK(Opts)
     MetaModelOpts.isVectorized = true;
 
     cpck.MetaModel = uq_createModel(MetaModelOpts, '-private');
+
+    %% Store error informations
+    %cpck.MetaModel.Error.LOO = max(loo_errors(i));
 end

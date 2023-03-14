@@ -248,8 +248,8 @@ function LALAnalysis = lal_analysis(Opts)
                         x_prior = uq_getSample(Opts.Prior, Opts.Maxpck.priorSamples);
 
                         Opts.Maxpck.qbounds = [0.025, 0.975];
-                        qxb = quantile(x_prior, Opts.Maxpck.qbounds(1));
-                        qxu = quantile(x_prior, Opts.Maxpck.qbounds(2));
+                        qxb = min(quantile(x_prior, Opts.Maxpck.qbounds(1)), min(X_cleaned));
+                        qxu = max(quantile(x_prior, Opts.Maxpck.qbounds(2)), max(X_cleaned));
                         x_prior = x_prior(all(x_prior > qxb & x_prior < qxu, 2), :);
 
                         % rescale data via normalization
