@@ -133,7 +133,7 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 30;
+init_eval = 150;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
 LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval);
@@ -146,32 +146,7 @@ init_logL = LALOpts.ExpDesign.LogLikelihood;
 %init_X = init_X(init_logL > qinit,:);
 %init_logL = init_logL(init_logL > qinit);
 
-%% Plot of the likelihood in components a1 and a2
-
-a1 = 1;
-a2 = 2;
-
-lq = quantile(init_logL, 0.2);
-init_Xq = init_X(init_logL > lq,:);
-init_logLq = init_logL(init_logL > lq);
-
-Hplot = linspace(min(init_Xq(:,a1)), max(init_Xq(:,a1)), 50);
-Lplot = linspace(min(init_Xq(:,a2)), max(init_Xq(:,a2)), 50);
-
-[x_grid_1, x_grid_2] = meshgrid(Hplot,Lplot);
-HL_grid = [x_grid_1(:), x_grid_2(:)];
-
-%Xplot = [0.5524, 0.0309, 0.8929, 0.0279, 0, 0];
-Xplot = mean(init_Xq);
-Xplot = [repmat(Xplot, size(HL_grid,1),1), HL_grid];
-
-Xplot(:,[a1,a2]) = HL_grid;
-
-logL_grid = log_likelihood(Xplot);
-logL_grid = reshape(logL_grid, 50, 50);
-
-
-%% Bayesian analysis (tuning first peaks step)
+%% Bayesian analysis (exploration first peaks step)
 
 clear LALOpts
 
@@ -179,7 +154,7 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 23;
+LALOpts.MaximumEvaluations = 50;
 LALOpts.ExpDesign.X = init_X;
 LALOpts.ExpDesign.LogLikelihood = init_logL;
 LALOpts.PlotLogLikelihood = true;
@@ -188,13 +163,13 @@ LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.OptMode = 'single';
  
 %LALOpts.SelectMax = 1;
-LALOpts.ClusterRange = 3;
+LALOpts.ClusterRange = 4;
 
 LALOpts.MetaOpts.MetaType = 'PCK';
-LALOpts.MetaOpts.PCK.PCE.Degree = 0:2;
-%LALOpts.MetaOpts.PCK.Mode = 'optimal';   
-LALOpts.MetaOpts.PCK.Kriging.Optim.Bounds = [0.1; 2];
-LALOpts.MetaOpts.PCK.Kriging.Corr.Family = 'Gaussian';
+LALOpts.MetaOpts.PCE.Degree = 0:4;
+%LALOpts.MetaOpts.Mode = 'optimal';   
+LALOpts.MetaOpts.Kriging.Optim.Bounds = [0.01; 50];
+%LALOpts.MetaOpts.Kriging.Corr.Family = 'gaussian';
 
 %LALOpts.PCK.Kriging.Optim.Bounds = [0.1; 100];
 
@@ -210,7 +185,7 @@ LALOpts.MetaOpts.PCK.Kriging.Corr.Family = 'Gaussian';
 %LALOpts.PCK.Kriging.Corr.Nugget = 1e-9;
 %LALOpts.PCK.Display = 'verbose';
 
-LALOpts.cleanQuantile = 0.025;
+LALOpts.cleanQuantile = 0.2;
 
 
 
@@ -230,60 +205,12 @@ LALOpts.StoreBusResults = true;
 
 LALOpts.DBMinPts = 5;
 
-LALOpts.FilterOutliers = false;
+%LALOpts.FilterOutliers = false;
 LALOpts.ClusteredMetaModel = true;
 
 FirstLALAnalysis = lal_analysis(LALOpts);
 
-fprintf("---   LogC: %f\n", FirstLALAnalysis.logC(end));
-fprintf("---   Found point with likelihood: %f\n", FirstLALAnalysis.OptPoints(end).logL)
-
-
-xopt = FirstLALAnalysis.OptPoints(end).X;
-logL_PCK = FirstLALAnalysis.PCK(end);
-
-fprintf("---   The surrogate likelihood was: %f\n", uq_evalModel(logL_PCK, xopt))
-
-logL_PCK_grid = uq_evalModel(logL_PCK, Xplot);
-logL_PCK_grid = reshape(logL_PCK_grid, 50, 50);
-
-
-% plot figures
-figure
-tiledlayout(1,2)
-
-ax = nexttile;
-
-hold on
-contourf(ax, Hplot, Lplot, logL_grid);
-colorbar(ax)
-scatter(ax, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
-%surfplot.EdgeColor = 'none';
-%surfplot.FaceAlpha = 0.5;
-%surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
-%surfplot_pck.EdgeColor = 'none';
-%surfplot_pck.FaceAlpha = 0.8;
-hold off
-title('Real likelihood visualization of component 5 and 6')
-
-ax_pck = nexttile;
-
-hold on
-contourf(ax_pck, Hplot, Lplot, logL_PCK_grid);
-colorbar(ax_pck)
-scatter(ax_pck, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
-scatter(ax_pck, xopt(:,a1), xopt(:,a2), 45, "black")
-%surfplot.EdgeColor = 'none';
-%surfplot.FaceAlpha = 0.5;
-%surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
-%surfplot_pck.EdgeColor = 'none';
-%surfplot_pck.FaceAlpha = 0.8;
-hold off
-title('Surrogate PCK likelihood visualization of component 5 and 6')
-
-drawnow
-
-%% Delaunay steps
+%% LAL enrichment (exploitation step)
 
 clear LALOpts
 
@@ -291,42 +218,34 @@ clear LALOpts
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 5;
-LALOpts.ExpDesign = FirstLALAnalysis.ExpDesign;
+LALOpts.MaximumEvaluations = 25;
+LALOpts.ExpDesign.X = FirstLALAnalysis.ExpDesign.X;
+LALOpts.ExpDesign.LogLikelihood = FirstLALAnalysis.ExpDesign.LogLikelihood;
 LALOpts.PlotLogLikelihood = true;
-%LALOpts.Bus.CStrategy = 'maxpck';
-LALOpts.Bus.Delaunay.maxk = 10;
+LALOpts.Bus.CStrategy = 'maxpck';
+%LALOpts.Bus.Delaunay.maxk = 50;
+%LALOpts.OptMode = 'single';
  
-LALOpts.OptMode = 'single';
-%LALOpts.SelectMax = 2;
-%LALOpts.ClusterRange = 2:20;
+%LALOpts.SelectMax = 1;
+LALOpts.ClusterRange = 2;
 
-LALOpts.PCK.Kriging.Optim.Bounds = [0.1; 100];
+LALOpts.MetaOpts.MetaType = 'PCK';
+LALOpts.MetaOpts.PCE.Degree = 0:4;
+%LALOpts.MetaOpts.Mode = 'optimal';   
+LALOpts.MetaOpts.Kriging.Optim.Bounds = [0.2; 5];
+LALOpts.MetaOpts.Kriging.Corr.Family = 'gaussian';
 
 
-LALOpts.PCK.PCE.Degree = 1:10;
+LALOpts.cleanQuantile = 0.5;
 
-%LALOpts.PCK.PCE.Degree = 1:15;
-%LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
-%LALOpts.PCK.Optim.Method = 'CMAES';
-%LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
-LALOpts.PCK.Kriging.Corr.Family = 'gaussian';
-%LALOpts.PCK.Kriging.Corr.Family = 'Matern-3_2';
-%LALOpts.PCK.Kriging.Corr.Type = 'Separable';
-LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
-%LALOpts.PCK.Kriging.theta = 9.999;
-%LALOpts.PCK.Display = 'verbose';
 
-%LALOpts.cleanQuantile = 0.025;
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 
-% TODO: cross validate
-%LALOpts.Ridge = 0.0;
 
-LALOpts.Bus.BatchSize = 10000;
-LALOpts.Bus.MaxSampleSize = 1000000;
+LALOpts.Bus.BatchSize = 5000;
+LALOpts.Bus.MaxSampleSize = 500000;
 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;
@@ -335,100 +254,62 @@ LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
 LALOpts.StoreBusResults = true;
 
-DelaunayLALAnalysis = lal_analysis(LALOpts);
+LALOpts.DBMinPts = 5;
 
-fprintf("---   LogC: %f\n", FirstLALAnalysis.logC(end));
-fprintf("---   Found point with likelihood: %f\n", FirstLALAnalysis.OptPoints(end).logL)
+%LALOpts.FilterOutliers = false;
+LALOpts.ClusteredMetaModel = true;
 
+SecondLALAnalysis = lal_analysis(LALOpts);
 
-xopt = DelaunayLALAnalysis.OptPoints(end).X;
-logL_PCK = DelaunayLALAnalysis.PCK(end);
-
-fprintf("---   The surrogate likelihood was: %f\n", uq_evalModel(logL_PCK, xopt))
-
-logL_PCK_grid = uq_evalModel(logL_PCK, Xplot);
-logL_PCK_grid = reshape(logL_PCK_grid, 50, 50);
-
-
-% plot figures
-figure
-tiledlayout(1,2)
-
-ax = nexttile;
-
-hold on
-contourf(ax, Hplot, Lplot, logL_grid);
-colorbar(ax)
-scatter(ax, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
-%surfplot.EdgeColor = 'none';
-%surfplot.FaceAlpha = 0.5;
-%surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
-%surfplot_pck.EdgeColor = 'none';
-%surfplot_pck.FaceAlpha = 0.8;
-hold off
-title('Real likelihood visualization of component 5 and 6')
-
-ax_pck = nexttile;
-
-hold on
-contourf(ax_pck, Hplot, Lplot, logL_PCK_grid);
-colorbar(ax_pck)
-scatter(ax_pck, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
-scatter(ax_pck, xopt(:,a1), xopt(:,a2), 45, "black")
-%surfplot.EdgeColor = 'none';
-%surfplot.FaceAlpha = 0.5;
-%surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
-%surfplot_pck.EdgeColor = 'none';
-%surfplot_pck.FaceAlpha = 0.8;
-hold off
-title('Surrogate PCK likelihood visualization of component 5 and 6')
-
-drawnow
-
-
-%% Finalize
+%% LAL enrichment (last peak tuning step)
 
 clear LALOpts
 
-LALOpts.Bus.logC = 300; %-max(post_logL_samples); % best value: -max log(L) 
+%LALOpts.Bus.logC = 300; %-max(post_logL_samples); % best value: -max log(L) 
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 1e3;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e4;
-LALOpts.MaximumEvaluations = 20;
-LALOpts.ExpDesign = DelaunayLALAnalysis.ExpDesign;
+LALOpts.MaximumEvaluations = 12;
+LALOpts.ExpDesign.X = SecondLALAnalysis.ExpDesign.X;
+LALOpts.ExpDesign.LogLikelihood = SecondLALAnalysis.ExpDesign.LogLikelihood;
 LALOpts.PlotLogLikelihood = true;
-%LALOpts.Bus.CStrategy = 'maxpck';
-%LALOpts.Bus.Delaunay.maxk = 60;
+LALOpts.Bus.CStrategy = 'delaunay';
+LALOpts.Bus.Delaunay.maxk = 10;
+%LALOpts.OptMode = 'single';
+ 
+%LALOpts.SelectMax = 1;
+LALOpts.ClusterRange = 4;
 
-%LALOpts.Bus.BatchSize = 10000;
-%LALOpts.Bus.MaxSampleSize = 1000000;
+LALOpts.MetaOpts.MetaType = 'PCK';
+LALOpts.MetaOpts.PCE.Degree = 0:4;
+%LALOpts.MetaOpts.Mode = 'optimal';   
+LALOpts.MetaOpts.Kriging.Optim.Bounds = [0.01; 50];
+%LALOpts.MetaOpts.Kriging.Corr.Family = 'gaussian';
 
-LALOpts.SelectMax = 2;
-LALOpts.ClusterRange = 2;
+%LALOpts.PCK.Kriging.Optim.Bounds = [0.1; 100];
 
-LALOpts.PCK.Kriging.Optim.Bounds = [0.1; 100];
-LALOpts.PCK.PCE.Degree = 1:10;
-
+%LALOpts.PCK.PCE.Degree = 1:10;
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
-%LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
-LALOpts.PCK.Kriging.Corr.Family = 'gaussian';
-%LALOpts.PCK.Kriging.Corr.Family = 'Matern-3_2';
-%LALOpts.PCK.Kriging.Corr.Type = 'Separable';
-LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
-%LALOpts.PCK.Kriging.theta = 9.999;
+%LALOpts.PCK.Kriging.Optim.MaxIter = 500;
+%LALOpts.PCK.Kriging.Optim.Tol = 1e-5;
+%LALOpts.PCK.Kriging.Corr.Family = 'gaussian';
+%LALOpts.PCK.Kriging.Corr.Family = 'matern-5_2';
+%LALOpts.PCK.Kriging.Corr.Type = 'separable';
+%LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
+%LALOpts.PCK.Kriging.Corr.Nugget = 1e-9;
 %LALOpts.PCK.Display = 'verbose';
 
-%LALOpts.cleanQuantile = 0.025;
+LALOpts.cleanQuantile = 0.3;
+
+
 
 LALOpts.LogLikelihood = refBayesAnalysis.LogLikelihood;
 LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 
-% TODO: cross validate
-%LALOpts.Ridge = 0.0;
 
-LALOpts.Bus.BatchSize = 10000;
-LALOpts.Bus.MaxSampleSize = 1000000;
+LALOpts.Bus.BatchSize = 5000;
+LALOpts.Bus.MaxSampleSize = 500000;
 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;
@@ -437,56 +318,52 @@ LALOpts.Validation.PriorLogLikelihood = prior_logL_samples;
 
 LALOpts.StoreBusResults = true;
 
+LALOpts.DBMinPts = 5;
+
+%LALOpts.FilterOutliers = false;
+%LALOpts.ClusteredMetaModel = true;
+
 LALAnalysis = lal_analysis(LALOpts);
 
-fprintf("---   LogC: %f\n", LALAnalysis.logC(end));
-fprintf("---   Found point with likelihood: %f\n", LALAnalysis.OptPoints(end).logL)
 
+%% Scatter validation
 
-xopt = LALAnalysis.OptPoints(end).X;
 logL_PCK = LALAnalysis.PCK(end);
 
-fprintf("---   The surrogate likelihood was: %f\n", uq_evalModel(logL_PCK, xopt))
+% Posterior validation
+check_interval = [min(prior_logL_samples), max(post_logL_samples)];
 
-logL_PCK_grid = uq_evalModel(logL_PCK, Xplot);
-logL_PCK_grid = reshape(logL_PCK_grid, 50, 50);
-
-
-% plot figures
 figure
-tiledlayout(1,2)
-
-ax = nexttile;
-
 hold on
-contourf(ax, Hplot, Lplot, logL_grid);
-colorbar(ax)
-scatter(ax, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
-%surfplot.EdgeColor = 'none';
-%surfplot.FaceAlpha = 0.5;
-%surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
-%surfplot_pck.EdgeColor = 'none';
-%surfplot_pck.FaceAlpha = 0.8;
+plot(check_interval, check_interval, 'k-');
+scatter(prior_logL_samples, uq_evalModel(logL_PCK, prior_samples), 'MarkerEdgeColor', '#7E2F8E');
+scatter(post_logL_samples, uq_evalModel(logL_PCK, post_samples));
 hold off
-title('Real likelihood visualization of component 5 and 6')
+%title('Posterior samples')
+ylabel('Surrogate Log-Likelihood')
+xlabel('Real Log-Likelihood')
+xlim(check_interval)
+ylim(check_interval)
+legend('Equivalence line', 'Prior', 'Posterior')
 
-ax_pck = nexttile;
 
-hold on
-contourf(ax_pck, Hplot, Lplot, logL_PCK_grid);
-colorbar(ax_pck)
-scatter(ax_pck, init_Xq(:,a1), init_Xq(:,a2), 25, init_logLq,  'filled')
-scatter(ax_pck, xopt(:,a1), xopt(:,a2), 45, "black")
-%surfplot.EdgeColor = 'none';
-%surfplot.FaceAlpha = 0.5;
-%surfplot_pck = surf(Hplot, Lplot, logL_PCK_grid);
-%surfplot_pck.EdgeColor = 'none';
-%surfplot_pck.FaceAlpha = 0.8;
-hold off
-title('Surrogate PCK likelihood visualization of component 5 and 6')
+%% Gplot and histograms
+
+X = LALAnalysis.ExpDesign.X;
+group = {'Ref. post. samples', 'Initial ED points','Enriched ED points'};
+color = lines(3);
+TT = [post_samples; X];
+idx = [zeros(post_samples_size,1); 2 * ones(size(init_X,1),1); ones(size(X,1) - size(init_X,1),1)];
+labeledGroups = categorical(idx, [0 2 1], group);
+
+xnames = {'alpha', 'beta', 'gamma', 'delta', 'InitH', 'InitL'};
+
+figure
+gplotmatrix(TT, [] ,labeledGroups,color,'.oo',[],[],'grpbars',xnames)
+
+exportgraphics(gcf,'../../final_results/pred_prey/gplotmatrix.eps')%,'ContentType','vector')
 
 drawnow
-
 
 
 %% Plot of prior validation errors over last run
