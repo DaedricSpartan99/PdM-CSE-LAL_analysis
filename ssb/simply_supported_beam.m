@@ -7,11 +7,11 @@ addpath('../tools')
 
 %% visualize
 
-%uq_figure
-%[I,~] = imread('SimplySupportedBeam.png');
-%image(I)
-%axis equal
-%set(gca, 'visible', 'off')
+uq_figure
+[I,~] = imread('SimplySupportedBeam.png');
+image(I)
+axis equal
+set(gca, 'visible', 'off')
 
 %% forward model setup
 

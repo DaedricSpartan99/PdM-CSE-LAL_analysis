@@ -65,14 +65,15 @@ posterior = @(x) mean(normpdf((x - post_means) ./ post_std) .* normpdf(y ./ sqrt
 
 %init_X = uq_getSample(PriorInput, init_eval);
 
+% Three peaks, two discovered
 %init_X = [-1.47; -1.44; 0.1090; -0.5877; -0.1903; 1.0143; -2.5958; 1.96; -1.96];
 
 % Two peaks
 %init_X = [0.1090; -0.5877; -0.1903; 1.0143; -2.5958; -1.1672; 0.4420; 0.9379; -1.0952; 0.1894];
 
-% Table experiment
+% Three peaks table experiment
 init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2; -1.8; -0.5];
-%init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2; -1.8];
+%init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5 ; 2; -2; -1.8];
 %init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2];
 
 init_logL = log_likelihood(init_X);
@@ -80,7 +81,7 @@ init_logL = log_likelihood(init_X);
 %% Initial state
 
 % validation set
-xplot = linspace(-5, 5, 1000);
+xplot = linspace(-4, 4, 1000);
 
 figure
 hold on
@@ -95,7 +96,7 @@ hold off
 %title('Initial state')
 xlabel('X')
 ylabel('Log-P.D.F')
-ylim([-400, 150])
+ylim([-800, 100])
 grid on
 legend
 
@@ -120,7 +121,7 @@ LALOpts.Bus.CStrategy = 'maxpck';
 LALOpts.MetaOpts.MetaType = 'PCK';
 LALOpts.MetaOpts.Mode = 'optimal';   
 LALOpts.MetaOpts.Kriging.Optim.Bounds = [0.2; 1];
-LALOpts.MetaOpts.PCE.Degree = 0:2;
+%LALOpts.MetaOpts.PCE.Degree = 0:2;
 %LALOpts.MetaOpts.PCK.Kriging.Optim.Tol = 1e-5;
 %LALOpts.MetaOpts.Kriging.Corr.Family = 'gaussian';
 %LALOpts.MetaOpts.PCK.Kriging.theta = 9.999;
@@ -131,7 +132,7 @@ LALOpts.MetaOpts.PCE.Degree = 0:2;
 
 
 %LALOpts.SelectMax = 1;
-%LALOpts.ClusterRange = 2:15;
+LALOpts.ClusterRange = 3;
 
 %LALOpts.DBMinPts = 5;
 
@@ -184,6 +185,7 @@ hold off
 %title('Final state')
 xlabel('X')
 ylabel('log-likelihood')
+ylim([-800, 100])
 grid on
 legend()
 
@@ -293,10 +295,12 @@ hold off
 set(gca, 'YScale', 'log')
 xlabel('Iteration')
 ylabel('Error')
+ylim([1e-5, 1e6])
 %title('Posterior or prior error vs. LOO error')
 grid on
 %ylim([min(pck_loo_err) / 10, 1000])
-legend('interpreter','latex', 'FontSize', 12)
+legend('interpreter','latex', 'FontSize', 10, 'NumColumns', 2)
+
 
 fprintf("Prior validation convergence rate: %f\n", -c(1))
 fprintf("Posterior validation convergence rate: %f\n", -a(1))
