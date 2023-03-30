@@ -17,10 +17,10 @@ PriorInput = uq_createInput(PriorOpts);
 %% Likelihood definition
 
 % peaks position
-y = [1.5, -1., -2.5];
+y = [1.5, -1.];%, -2.5];
 
 % peaks extension
-std_disc = [0.1, 0.05, 0.02];
+std_disc = [0.1, 0.05];%, 0.02];
 
 % distance scaling
 a = 1.5;
@@ -69,10 +69,10 @@ posterior = @(x) mean(normpdf((x - post_means) ./ post_std) .* normpdf(y ./ sqrt
 %init_X = [-1.47; -1.44; 0.1090; -0.5877; -0.1903; 1.0143; -2.5958; 1.96; -1.96];
 
 % Two peaks
-%init_X = [0.1090; -0.5877; -0.1903; 1.0143; -2.5958; -1.1672; 0.4420; 0.9379; -1.0952; 0.1894];
+init_X = [0.1090; -0.5877; -0.1903; 1.0143; -2.5958; -1.1672; 0.4420; 0.9379; -1.0952; 0.1894];
 
 % Three peaks table experiment
-init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2; -1.8; -0.5];
+%init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2; -1.8; -0.5];
 %init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5 ; 2; -2; -1.8];
 %init_X = [-1.47; -1.44; 0.11; -1; -0.2; 0.8; -2.6; 1.5; 2; -2];
 
@@ -113,7 +113,7 @@ LALOpts.ExpDesign.LogLikelihood = init_logL;
 %LALOpts.Bus.p0 = 0.1;                            % Quantile probability for Subset
 %LALOpts.Bus.BatchSize = 5e4;                             % Number of samples for Subset simulation
 %LALOpts.Bus.MaxSampleSize = 1e6;
-LALOpts.MaximumEvaluations = 20;
+LALOpts.MaximumEvaluations = 40;
 LALOpts.Bus.CStrategy = 'maxpck';
 %LALOpts.Delaunay.maxk = 10;
 %LALOpts.OptMode = 'single';
@@ -378,10 +378,11 @@ hold on
 histogram(prior_samples,100, 'Normalization', 'pdf');
 histogram(post_samples,100, 'Normalization', 'pdf', 'FaceColor', "#EDB120", 'FaceAlpha', 1, 'EdgeColor', 'none'); 
 histogram(LALAnalysis.PostSamples,100, 'Normalization', 'pdf', 'FaceColor', "#7E2F8E", 'EdgeColor', 'none'); 
+plot(xplot', ref_posterior,'k--','LineWidth',1.5)
 hold off
 xlabel('X')
-ylabel('P.d.f')
-legend('Prior', 'Ref. MCMC Posterior', 'BuS Post. samples')
+ylabel('Probability density function')
+legend('Prior samples', 'MCMC Posterior samples', 'BuS Post. samples', 'Exact posterior', 'FontSize', 12)
 
 
 figure
