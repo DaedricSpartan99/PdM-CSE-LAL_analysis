@@ -90,9 +90,9 @@ function LALAnalysis = lal_analysis(Opts)
         T = X * W_pca(:,1:2);
         Tpost = Opts.Validation.PostSamples * W_pca(:,1:2);
         hold on
+        pca_post_scatter = scatter(ax4, Tpost(:,1), Tpost(:,2), 5);
         pca_scatter = scatter(ax4, T(:,1), T(:,2), 20, logL, 'Filled');
         pca_colorbar = colorbar(ax4);
-        pca_post_scatter = scatter(ax4, Tpost(:,1), Tpost(:,2), 5);
         hold off
         title(ax4, 'Experimental design PCA')
         xlabel(ax4, 'x1')
@@ -244,50 +244,62 @@ function LALAnalysis = lal_analysis(Opts)
                         maxl_x0 = X_cleaned(maxl_index, :);
 
                         % sample from prior distribution for other points
-                        Opts.Maxpck.priorSamples = 1000;
+                        Opts.Maxpck.priorSamples = 5000;
                         x_prior = uq_getSample(Opts.Prior, Opts.Maxpck.priorSamples);
 
-                        Opts.Maxpck.qbounds = [0.025, 0.975];
-                        qxb = min(quantile(x_prior, Opts.Maxpck.qbounds(1)), min(X_cleaned));
-                        qxu = max(quantile(x_prior, Opts.Maxpck.qbounds(2)), max(X_cleaned));
-                        x_prior = x_prior(all(x_prior > qxb & x_prior < qxu, 2), :);
+                        x0 = mean(x_prior);
+                        lb = min(x_prior);
+                        up = max(x_prior);
 
-                        % rescale data via normalization
-                        x_mean = mean(x_prior);
-                        x_std = std(x_prior);
+                        f = @(x) -uq_evalModel(logL_PCK, x);
+                        gs = GlobalSearch;
+                        problem = createOptimProblem('fmincon','x0',x0,'objective',f,'lb',lb,'ub',up);
+                        xopt_pck = run(gs,problem)
+                        logL_pck_opt = uq_evalModel(logL_PCK, xopt_pck);
 
-                        % Optimize from each point
-                        Opts.Maxpck.startPoints = 5;
-                        z0 = ([maxl_x0; x_prior(1:Opts.Maxpck.startPoints,:)] - x_mean) ./ x_std;
-                        xmin = (min(x_prior) - x_mean) ./ x_std;
-                        xmax = (max(x_prior) - x_mean) ./ x_std;
+%                         Opts.Maxpck.qbounds = [0.025, 0.975];
+%                         qxb = min(quantile(x_prior, Opts.Maxpck.qbounds(1)), min(X_cleaned));
+%                         qxu = max(quantile(x_prior, Opts.Maxpck.qbounds(2)), max(X_cleaned));
+%                         x_prior = x_prior(all(x_prior > qxb & x_prior < qxu, 2), :);
+% 
+%                         % rescale data via normalization
+%                         x_mean = mean(x_prior);
+%                         x_std = std(x_prior);
+% 
+%                         % Optimize from each point
+%                         Opts.Maxpck.startPoints = 5;
+%                         z0 = ([maxl_x0; x_prior(1:Opts.Maxpck.startPoints,:)] - x_mean) ./ x_std;
+%                         xmin = (min(x_prior) - x_mean) ./ x_std;
+%                         xmax = (max(x_prior) - x_mean) ./ x_std;
+%     
+%                         % determine c from experimental design
+%                         c_zero_variance = -maxl_logL;    
+%     
+%                         % define inverse log-likelihood to find the minimum of
+%                         f = @(z) -uq_evalModel(logL_PCK, x_std .* z + x_mean);
+% 
+%                         opt_pck = zeros(size(z0,1),1);
+% 
+%                         for opt_ind = 1:size(z0,1)
+% 
+%                             % maximize surrogate log-likelihood
+%                             options = optimoptions('fmincon', 'Display', 'off');
+%                             [~, maxl_pck, found_flag] = fmincon(f, z0(opt_ind,:), [], [], [], [], xmin, xmax, [], options);
+%         
+%                             % Take negative log-likelihood (overestimation)
+%                             if found_flag >= 0
+%                                 opt_pck(opt_ind) = -maxl_pck;
+%                             else
+%                                 fprintf('Found patological value of log(c) estimation, correcting with experimental design maximum.\n')
+%                                 opt_pck(opt_ind) = -c_zero_variance;
+%                             end
+%                             fprintf("Peak index %d, fmincon flag: %d, log-likelihood: %f \n", opt_ind, found_flag, -maxl_pck)
+%                         end
     
-                        % determine c from experimental design
-                        c_zero_variance = -maxl_logL;    
-    
-                        % define inverse log-likelihood to find the minimum of
-                        f = @(z) -uq_evalModel(logL_PCK, x_std .* z + x_mean);
-
-                        opt_pck = zeros(size(z0,1),1);
-
-                        for opt_ind = 1:size(z0,1)
-
-                            % maximize surrogate log-likelihood
-                            options = optimoptions('fmincon', 'Display', 'off');
-                            [~, maxl_pck, found_flag] = fmincon(f, z0(opt_ind,:), [], [], [], [], xmin, xmax, [], options);
-        
-                            % Take negative log-likelihood (overestimation)
-                            if found_flag >= 0
-                                opt_pck(opt_ind) = -maxl_pck;
-                            else
-                                fprintf('Found patological value of log(c) estimation, correcting with experimental design maximum.\n')
-                                opt_pck(opt_ind) = -c_zero_variance;
-                            end
-                            fprintf("Peak index %d, fmincon flag: %d, log-likelihood: %f \n", opt_ind, found_flag, -maxl_pck)
-                        end
-    
-                        BayesOpts.Bus.logC = min(c_zero_variance, -max(opt_pck));
+%                        BayesOpts.Bus.logC = min(c_zero_variance, -max(opt_pck));
                         %BayesOpts.Bus.logC = -max(opt_pck);
+
+                        BayesOpts.Bus.logC = min(-max(logL), -logL_pck_opt);
     
                     case 'delaunay'
     
@@ -515,11 +527,25 @@ function LALAnalysis = lal_analysis(Opts)
     %% Run a latest subset simulation starting from max of experimental design
 
     fprintf("Finalizing Bayesian analysis\n")
-    fprintf("Constant log(c) = %f\n", -max(logL))
 
+    Opts.Maxpck.priorSamples = 5000;
+    x_prior = uq_getSample(Opts.Prior, Opts.Maxpck.priorSamples);
+
+    x0 = mean(x_prior);
+    lb = min(x_prior);
+    up = max(x_prior);
+
+    f = @(x) -uq_evalModel(logL_PCK, x);
+    gs = GlobalSearch;
+    problem = createOptimProblem('fmincon','x0',x0,'objective',f,'lb',lb,'ub',up);
+    xopt_pck = run(gs,problem)
+    logL_pck_opt = uq_evalModel(logL_PCK, xopt_pck);
+    
     BayesOpts.Bus = Opts.Bus;
-    BayesOpts.Bus.logC = -max(logL);
+    BayesOpts.Bus.logC = min(-max(logL), -logL_pck_opt);
     BayesOpts.Prior = Opts.Prior;
+
+    fprintf("Constant log(c) = %f\n", BayesOpts.Bus.logC)
 
     BayesOpts.Bus.BatchSize = 10000;
     BayesOpts.Bus.MaxSampleSize = 1000000;

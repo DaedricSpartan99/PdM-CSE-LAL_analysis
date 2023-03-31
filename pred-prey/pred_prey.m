@@ -133,7 +133,7 @@ prior_logL_samples = prior_logL_samples(prior_logL_samples > quantile(prior_logL
 
 %% Experimental design setup
 
-init_eval = 350;
+init_eval = 150;
 log_likelihood = refBayesAnalysis.LogLikelihood;
 
 LALOpts.ExpDesign.X = uq_getSample(refBayesAnalysis.Internal.FullPrior, init_eval);
@@ -185,7 +185,7 @@ LALOpts.MetaOpts.Kriging.Optim.Bounds = [0.01; 50];
 %LALOpts.PCK.Kriging.Corr.Nugget = 1e-9;
 %LALOpts.PCK.Display = 'verbose';
 
-LALOpts.cleanQuantile = 0.2;
+%LALOpts.cleanQuantile = 0.2;
 
 
 
@@ -236,7 +236,7 @@ LALOpts.MetaOpts.Kriging.Optim.Bounds = [0.2; 5];
 LALOpts.MetaOpts.Kriging.Corr.Family = 'gaussian';
 
 
-LALOpts.cleanQuantile = 0.5;
+LALOpts.cleanQuantile = 0.3;
 
 
 
@@ -300,7 +300,7 @@ LALOpts.MetaOpts.Kriging.Optim.Bounds = [0.01; 50];
 %LALOpts.PCK.Kriging.Corr.Nugget = 1e-9;
 %LALOpts.PCK.Display = 'verbose';
 
-LALOpts.cleanQuantile = 0.3;
+%LALOpts.cleanQuantile = 0.3;
 
 
 
