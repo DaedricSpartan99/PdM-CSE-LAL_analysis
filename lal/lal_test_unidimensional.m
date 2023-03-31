@@ -371,18 +371,43 @@ lal_prior_logL_samples = lalBayesAnalysis.LogLikelihood(prior_samples);
 %lal_prior_samples = prior_samples(lal_prior_logL_samples > quantile(lal_prior_logL_samples, 0.1), :);
 %lal_prior_logL_samples = lal_prior_logL_samples(lal_prior_logL_samples > quantile(lal_prior_logL_samples, 0.1));
 
+%% Run BuS on reference likelihood
+BayesOpts.Bus = LALAnalysis.Opts.Bus;
+BayesOpts.Bus.logC = -log(7);
+BayesOpts.Prior = LALAnalysis.Opts.Prior;
+
+BayesOpts.Bus.BatchSize = 10000;
+BayesOpts.Bus.MaxSampleSize = 1000000;
+
+% a= 1.5;
+% modelopts.mHandle = @(x) log(mean(normpdf((y-a*x) ./ std_disc) ./ std_disc, 2));
+% modelopts.isVectorized = true;
+% lModel = uq_createModel(modelopts);
+% 
+% BayesOpts.LogLikelihood = lModel; 
+
+BayesOpts.LogLikelihood = pck; 
+
+BusAnalysis = bus_analysis(BayesOpts);
+
+px_samples = BusAnalysis.Results.Bus.PostSamples;
+lsf = BusAnalysis.Results.Bus.LSF;
+[mean_post_LSF,~] = uq_evalModel(lsf, px_samples);
+bus_posterior = px_samples(mean_post_LSF <= 0, 2:end);
+
 %% Bayesian analysis samples plot
 
 figure
 hold on
 histogram(prior_samples,100, 'Normalization', 'pdf');
 histogram(post_samples,100, 'Normalization', 'pdf', 'FaceColor', "#EDB120", 'FaceAlpha', 1, 'EdgeColor', 'none'); 
-histogram(LALAnalysis.PostSamples,100, 'Normalization', 'pdf', 'FaceColor', "#7E2F8E", 'EdgeColor', 'none'); 
-plot(xplot', ref_posterior,'k--','LineWidth',1.5)
+histogram(bus_posterior,100, 'Normalization', 'pdf', 'FaceColor', "#77AC30",'FaceAlpha', 1, 'EdgeColor', 'none'); 
+plot(xplot', lal_posterior,'k--','LineWidth',1.5)
 hold off
 xlabel('X')
 ylabel('Probability density function')
-legend('Prior samples', 'MCMC Posterior samples', 'BuS Post. samples', 'Exact posterior', 'FontSize', 12)
+grid on
+legend('Prior samples', 'MCMC post. samples', 'BuS post. samples', 'Exact posterior', 'FontSize', 11)
 
 
 figure
