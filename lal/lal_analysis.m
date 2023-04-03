@@ -40,6 +40,10 @@ function LALAnalysis = lal_analysis(Opts)
         logL = Opts.ExpDesign.LogLikelihood;
     end
 
+    if ~isfield(Opts, 'PlotConvergence')
+        Opts.PlotConvergence = true;
+    end
+
     if ~isfield(Opts, 'PlotLogLikelihood')
         Opts.PlotLogLikelihood = false;
     end
@@ -48,6 +52,18 @@ function LALAnalysis = lal_analysis(Opts)
 
     %Opts.Validation.PostLogLikelihood = max(Opts.Validation.PostLogLikelihood, -1200);
     %Opts.Validation.PriorLogLikelihood = max(Opts.Validation.PriorLogLikelihood, -1200);
+
+    if Opts.PlotConvergence
+
+        reliability_indexes = zeros(1, Opts.MaximumEvaluations);
+
+        figure
+        axr = semilogy([1],[1],'-o', 'MarkerSize', 12, 'MarkerEdgeColor', 'black', 'MarkerFaceColor', "#EDB120", 'LineWidth', 1.);
+        grid on
+        xlabel('Iteration');
+        ylabel('Reliability index');
+        title('Convergence monitoring');
+    end
 
     % plot setup
     if Opts.PlotLogLikelihood
@@ -496,6 +512,13 @@ function LALAnalysis = lal_analysis(Opts)
             LALAnalysis.logC(i) = BayesOpts.Bus.logC;
         end
 
+        % Update convegence monitor
+        if Opts.PlotConvergence
+            reliability_indexes(i) = BusAnalysis.Results.ReliabilityIndex;
+            set(axr, 'XData', 1:i, 'YData',reliability_indexes(1:i));
+
+            drawnow
+        end
 
         % Update plot
         if Opts.PlotLogLikelihood

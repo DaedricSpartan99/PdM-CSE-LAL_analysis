@@ -61,17 +61,38 @@ function BayesianAnalysis = bus_analysis(BayesOpts)
     SSOpts.Model = uq_createModel(LSFOpts, '-private');
     SSOpts.Input = uq_createInput(BusPriorOpts, '-private');
     SSimAnalysis = uq_createAnalysis(SSOpts, '-private');
+
+    %% Estimate reliability index
+
+    LSFOpts.Parameters.ConfAlpha = 0.025;
+    LSFOpts.mFile = 'limit_state_model_conf';
+
+    % Run SuS for + failure probability
+    LSFOpts.Parameters.ConfSign = '+';
+    SSOpts.Model = uq_createModel(LSFOpts, '-private');
+    SSimAnalysisPlus = uq_createAnalysis(SSOpts, '-private');
+
+    % Run SuS for - failure probability
+    LSFOpts.Parameters.ConfSign = '-';
+    SSOpts.Model = uq_createModel(LSFOpts, '-private');
+    SSimAnalysisMinus = uq_createAnalysis(SSOpts, '-private');
+
+    % Compute Reliability index
+    beta_0 = -norminv(SSimAnalysis.Results.Pf);
+    beta_plus = -norminv(SSimAnalysisMinus.Results.Pf);
+    beta_minus = -norminv(SSimAnalysisPlus.Results.Pf);
+
     
     %% Store results and opts
     BayesianAnalysis.Results.Evidence = exp(log(SSimAnalysis.Results.Pf) - BayesOpts.Bus.logC);
     BayesianAnalysis.Results.Subset = SSimAnalysis.Results;
     History = {SSimAnalysis.Results.History.X};
 
-    
-    %BayesianAnalysis.Results.PostSamples = History{end}{end}(:,2:end);
+    % Reliability index
+    BayesianAnalysis.Results.ReliabilityIndex = abs(beta_plus - beta_minus) / beta_0;
 
     % Quasi-posterior samples and evaluations
-    BayesianAnalysis.Results.Bus.LSF = SSOpts.Model;
+    BayesianAnalysis.Results.Bus.LSF = SSimAnalysis.Options.Model;
     BayesianAnalysis.Results.Bus.PostSamples = History{end}{end};
 
     % Options
