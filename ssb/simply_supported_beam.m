@@ -138,16 +138,16 @@ LALOpts.ClusterRange = 3;
 %LALOpts.MetaOpts.Trend.Type = 'linear';
 
 LALOpts.MetaOpts.MetaType = 'PCK';
-LALOpts.MetaOpts.PCE.Degree = 0:2;
+%LALOpts.MetaOpts.PCE.Degree = 0:2;
 LALOpts.MetaOpts.Mode = 'optimal';   
-LALOpts.MetaOpts.Kriging.Optim.Bounds = [0.2, 0.2, 0.01; 100, 100, 2];
+%LALOpts.MetaOpts.Kriging.Optim.Bounds = [0.2, 0.2, 0.01; 100, 100, 2];
 LALOpts.MetaOpts.Kriging.Corr.Family = 'gaussian';
 
 %LALOpts.PCK.PCE.PolyTypes = {'Hermite', 'Hermite'};
 %LALOpts.PCK.Optim.Method = 'CMAES';
 %LALOpts.PCK.Kriging.Optim.MaxIter = 1000;
 %LALOpts.PCK.Kriging.Corr.Family = 'Matern-3_2';
-%LALOpts.PCK.Kriging.Corr.Type = 'Separable';
+LALOpts.PCK.Kriging.Corr.Type = 'Separable';
 %LALOpts.PCK.Kriging.Corr.Type = 'ellipsoidal';
 %LALOpts.PCK.Kriging.theta = 9.999;
 %LALOpts.PCK.Display = 'verbose';
@@ -164,7 +164,7 @@ LALOpts.Prior = refBayesAnalysis.Internal.FullPrior;
 LALOpts.DBMinPts = 5;
 
 %LALOpts.FilterOutliers = false;
-LALOpts.ClusteredMetaModel = true;
+%LALOpts.ClusteredMetaModel = true;
 
 LALOpts.Validation.PostSamples = post_samples;
 LALOpts.Validation.PostLogLikelihood = post_logL_samples;
@@ -192,7 +192,7 @@ check_interval = [min(post_logL_samples), max(post_logL_samples)];
 figure
 hold on
 plot(check_interval, check_interval);
-scatter(post_logL_samples, uq_evalModel(logL_PCK, post_samples));
+scatter(post_logL_samples, uq_evalModel(logL_PCK, post_samples), 'MarkerEdgeColor', '#D95319');
 hold off
 %title('Posterior samples')
 ylabel('Surrogate Log-Likelihood')
@@ -206,7 +206,7 @@ check_interval = [min(prior_logL_samples), max(prior_logL_samples)];
 figure
 hold on
 plot(check_interval, check_interval);
-scatter(prior_logL_samples, uq_evalModel(logL_PCK, prior_samples), 'MarkerEdgeColor', '#7E2F8E');
+scatter(prior_logL_samples, uq_evalModel(logL_PCK, prior_samples), 'MarkerEdgeColor', '#0072BD');
 hold off
 %title('Posterior samples')
 ylabel('Surrogate Log-Likelihood')
@@ -228,7 +228,7 @@ xnames = {'Load', 'Young modulus', 'Discrepancy variance'};
 figure
 gplotmatrix(TT, [] ,labeledGroups,color,'.oo',[],[],'grpbars',xnames)
 
-exportgraphics(gcf,'../../final_results/ssb/gplotmatrix.eps')%,'ContentType','vector')
+%exportgraphics(gcf,'../../final_results/ssb/gplotmatrix.eps')%,'ContentType','vector')
 
 drawnow
 
@@ -242,7 +242,12 @@ set(h.EntryContainer.NodeChildren(1).Icon.Transform.Children.Children, 'Size', 1
 set(h.EntryContainer.NodeChildren(2).Icon.Transform.Children.Children, 'Size', 15)
 set(h.EntryContainer.NodeChildren(3).Icon.Transform.Children.Children, 'Size', 15)
 
+%% Log likelihood histogram
 
+figure
+histogram(LALAnalysis.ExpDesign.LogLikelihood, 30, 'FaceColor', '#7E2F8E')
+ylabel('Count in exp. design')
+xlabel('Log-likelihood')
 
 %% Plot of prior validation errors over last run
 
@@ -285,6 +290,7 @@ legend('interpreter','latex')
 sprintf("Prior validation convergence rate: %f", -c(1))
 sprintf("Posterior validation convergence rate: %f", -a(1))
 sprintf("LOO convergence rate: %f", -b(1))
+
 
 
 %% Limit state function check
