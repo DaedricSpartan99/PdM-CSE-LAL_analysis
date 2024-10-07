@@ -119,11 +119,11 @@ myInput = handlesBayesAnalysis.Internal.FullPrior;
 
 ## Learn more about the math behind
 
-* [https://drive.google.com/file/d/1UQFo-dxXswSPfIqeBDFJwV2JcDodUfu3/view?usp=sharing](Thesis presentation)
-* [https://drive.google.com/file/d/1jHn4E5WANII1FbTdkE6nLmnVLnIaEWdA/view?usp=sharing](Thesis poster)
+* [Thesis presentation](https://drive.google.com/file/d/1UQFo-dxXswSPfIqeBDFJwV2JcDodUfu3/view?usp=sharing)
+* [Thesis poster](https://drive.google.com/file/d/1jHn4E5WANII1FbTdkE6nLmnVLnIaEWdA/view?usp=sharing)
 
 ## Commissioners and credits
-* [https://www.geomod.ch/](Geomod SA, Lausanne)
-* [https://baug.ethz.ch/en/department/people/staff/personen-detail.MTQ3NDU3.TGlzdC82NzksLTU1NTc1NDEwMQ==.html](Thesis supervisor, ETH, Dr. Stefano Marelli)
-* [https://baug.ethz.ch/en/department/people/staff/personen-detail.MTg3NzUx.TGlzdC82NzksLTU1NTc1NDEwMQ==.html](Thesis commissioner, ETH, Prof. Bruno Sudret)
-* [https://people.epfl.ch/marco.picasso](Thesis commissioner, EPFL, Prof. Marco Picasso)
+* [Geomod SA, Lausanne](https://www.geomod.ch/)
+* [Thesis supervisor, ETH, Dr. Stefano Marelli](https://baug.ethz.ch/en/department/people/staff/personen-detail.MTQ3NDU3.TGlzdC82NzksLTU1NTc1NDEwMQ==.html)
+* [Thesis commissioner, ETH, Prof. Bruno Sudret](https://baug.ethz.ch/en/department/people/staff/personen-detail.MTg3NzUx.TGlzdC82NzksLTU1NTc1NDEwMQ==.html)
+* [Thesis commissioner, EPFL, Prof. Marco Picasso](https://people.epfl.ch/marco.picasso)
